@@ -1,5 +1,5 @@
-Omni 1.1.0 — Electron Windows x64 release
-Build date: 2026-08-21
+Eon 1.2.0 — Electron Windows x64 release
+Build date: 2026-09-26
 
 Installer
   npm run dist ile release/ altında oluşturulur.

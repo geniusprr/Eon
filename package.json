@@ -1,6 +1,6 @@
 {
   "name": "eon",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "main": "dist-electron/electron/main.js",
   "description": "Eon — Windows için tarayıcı, yapay zekâ, dosya paylaşımı, uzaktan erişim, medya, alarm ve güç yönetimini tek masaüstünde birleştiren kişisel çalışma alanı.",

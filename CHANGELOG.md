@@ -1,5 +1,11 @@
 # Değişiklikler
 
+## 1.2.0 — 2026-09-26
+
+- Uygulama genelinde Omni markası Eon olarak yenilendi.
+- Tarayıcı URL normalizasyonu ve birden fazla arama motoru desteği geliştirildi.
+- Etkinlik oluşturma ve yönetimi içeren yeni Takvim özelliği eklendi.
+
 ## 1.1.0 — 2026-08-20
 
 - Mini OS Ana Sayfa & Özelleştirilebilir Widget'lar (YouTube Müzik, Hava Durumu, Başlık Çubuğu Mini Oynatıcı)
