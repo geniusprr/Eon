@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="app-icon.png" width="96" alt="Omni uygulama simgesi" />
+  <img src="app-icon.png" width="96" alt="Eon uygulama simgesi" />
 
-  <h1>Omni</h1>
+  <h1>Eon</h1>
 
   <p><strong>Windows için kişisel çalışma alanın.</strong></p>
   <p>Tarayıcı, yapay zekâ, notlar, dosya paylaşımı, uzaktan erişim, medya, alarm ve güç yönetimi — tek, sakin ve modern masaüstünde.</p>
@@ -23,14 +23,14 @@
 </div>
 
 <p align="center">
-  <img src="docs/images/omni-home.jpg" width="100%" alt="Omni ana sayfa" />
+  <img src="docs/images/Eon-home.jpg" width="100%" alt="Eon ana sayfa" />
 </p>
 
-## Omni nedir?
+## Eon nedir?
 
-Omni, Windows üzerinde günlük kullandığın araçları ayrı ayrı pencerelere dağıtmak yerine tek bir masaüstü kabuğunda birleştiren yerel bir çalışma alanıdır. Gerçek Chromium tabanlı tarayıcı sekmeleri, gömülü LibreChat, Markdown/Vault not sistemi, LocalSend uyumlu dosya aktarımı, mobil kumanda, güç zamanlayıcıları, alarmlar ve medya kontrolleri aynı arayüz diliyle birlikte çalışır.
+Eon, Windows üzerinde günlük kullandığın araçları ayrı ayrı pencerelere dağıtmak yerine tek bir masaüstü kabuğunda birleştiren yerel bir çalışma alanıdır. Gerçek Chromium tabanlı tarayıcı sekmeleri, gömülü LibreChat, Markdown/Vault not sistemi, LocalSend uyumlu dosya aktarımı, mobil kumanda, güç zamanlayıcıları, alarmlar ve medya kontrolleri aynı arayüz diliyle birlikte çalışır.
 
-Omni bir web sayfasını masaüstü uygulaması gibi gösteren basit bir wrapper değildir. Electron ana süreci tarayıcı yaşam döngüsünü, Windows entegrasyonlarını, yerel sunucuları, bildirimleri, dosya aktarımını ve sistem işlemlerini yönetirken React arayüzü bütün bu yetenekleri tek bir deneyimde toplar.
+Eon bir web sayfasını masaüstü uygulaması gibi gösteren basit bir wrapper değildir. Electron ana süreci tarayıcı yaşam döngüsünü, Windows entegrasyonlarını, yerel sunucuları, bildirimleri, dosya aktarımını ve sistem işlemlerini yönetirken React arayüzü bütün bu yetenekleri tek bir deneyimde toplar.
 
 | Çalışma alanı | Ne sunuyor? | Öne çıkanlar |
 | --- | --- | --- |
@@ -49,9 +49,9 @@ Omni bir web sayfasını masaüstü uygulaması gibi gösteren basit bir wrapper
 
 ### 1. Ana Sayfa — her şeyin başladığı yer
 
-<p align="center"><img src="docs/images/omni-home.jpg" width="100%" alt="Omni Ana Sayfa dashboard" /></p>
+<p align="center"><img src="docs/images/Eon-home.jpg" width="100%" alt="Eon Ana Sayfa dashboard" /></p>
 
-Ana sayfa, Omni'nin kontrol merkezi. Üç kolonlu sürüklenebilir widget düzeni; yer imlerini, hızlı erişim kısayollarını, görevleri, son notu, bağlı cihazları, güç sayacını, hava durumunu ve çalan medyayı aynı bakışta gösterir. Widget'lar kişiselleştirilebilir; sık kullanılan programlar ve web siteleri doğrudan buradan açılabilir.
+Ana sayfa, Eon'nin kontrol merkezi. Üç kolonlu sürüklenebilir widget düzeni; yer imlerini, hızlı erişim kısayollarını, görevleri, son notu, bağlı cihazları, güç sayacını, hava durumunu ve çalan medyayı aynı bakışta gösterir. Widget'lar kişiselleştirilebilir; sık kullanılan programlar ve web siteleri doğrudan buradan açılabilir.
 
 - Google/adres araması için ana ekranda gerçek tarayıcı arama çubuğu ve `Ctrl + L` desteği.
 - Program ve web sitesi kısayolları için özelleştirilebilir Hızlı Erişim alanı.
@@ -60,41 +60,41 @@ Ana sayfa, Omni'nin kontrol merkezi. Üç kolonlu sürüklenebilir widget düzen
 
 ### 2. Tarayıcı — uygulamanın içinde gerçek web
 
-<p align="center"><img src="docs/images/omni-browser.jpg" width="100%" alt="Omni yerleşik tarayıcı" /></p>
+<p align="center"><img src="docs/images/Eon-browser.jpg" width="100%" alt="Eon yerleşik tarayıcı" /></p>
 
-Omni'nin tarayıcısı Electron'un native Chromium yüzeyini kullanır. Web içeriği React içinde taklit edilmez; her sekme gerçek bir tarayıcı yaşam döngüsüne sahiptir ve uygulama kabuğuyla senkron çalışır.
+Eon'nin tarayıcısı Electron'un native Chromium yüzeyini kullanır. Web içeriği React içinde taklit edilmez; her sekme gerçek bir tarayıcı yaşam döngüsüne sahiptir ve uygulama kabuğuyla senkron çalışır.
 
 - Çoklu sekme, sabitleme, çoğaltma, sessize alma ve sekme oturumu geri yükleme.
-- Geri/ileri, yenile, omnibox, favicon, popup ve fullscreen yönetimi.
+- Geri/ileri, yenile, Eonbox, favicon, popup ve fullscreen yönetimi.
 - Geçmiş, indirmeler ve site izinleri için kalıcı yerel durum.
 - Aktif medya algılama ve ana sayfadaki Müzik widget'ıyla senkron kontrol.
-- Son sekme kapandığında Omni ana sayfasına doğal geri dönüş.
+- Son sekme kapandığında Eon ana sayfasına doğal geri dönüş.
 
 ### 3. AI · LibreChat — model bağımsız çalışma alanı
 
-<p align="center"><img src="docs/images/omni-librechat.jpg" width="100%" alt="Omni LibreChat AI çalışma alanı" /></p>
+<p align="center"><img src="docs/images/Eon-librechat.jpg" width="100%" alt="Eon LibreChat AI çalışma alanı" /></p>
 
-Omni, resmi LibreChat istemcisini kendi yerel AI katmanıyla birlikte çalıştırır. Ayrı Docker kurulumu veya dışarıda açık bırakılması gereken bir LibreChat sunucusu gerekmeden uygulamanın içinde ayrı bir native çalışma alanı olarak açılır.
+Eon, resmi LibreChat istemcisini kendi yerel AI katmanıyla birlikte çalıştırır. Ayrı Docker kurulumu veya dışarıda açık bırakılması gereken bir LibreChat sunucusu gerekmeden uygulamanın içinde ayrı bir native çalışma alanı olarak açılır.
 
 Desteklenen sağlayıcılar: **OpenRouter, OpenAI, Anthropic, Google Gemini, Mistral, Groq, Ollama** ve OpenAI uyumlu **custom endpoint**. Konuşmalar ve model yapılandırması yerel uygulama katmanı üzerinden yönetilir.
 
 ### 4. Güç & Zamanlayıcı — Windows planlarını sadeleştir
 
-<p align="center"><img src="docs/images/omni-power.jpg" width="100%" alt="Omni güç zamanlayıcısı" /></p>
+<p align="center"><img src="docs/images/Eon-power.jpg" width="100%" alt="Eon güç zamanlayıcısı" /></p>
 
 Kapatma ve yeniden başlatma planlarını Windows'a doğrudan uygular. 15 dakika, 30 dakika, 1 saat ve 2 saat hazır süreleri kullanabilir veya saat/dakika/saniyeyi kendin belirleyebilirsin. Plan aktifken kalan süre görünür ve tek tıkla iptal edilebilir; pencere kapansa bile sistem planı devam eder.
 
 ### 5. Alarmlar — tek seferlik veya tekrarlayan
 
-<p align="center"><img src="docs/images/omni-alarms.jpg" width="100%" alt="Omni alarm ekranı" /></p>
+<p align="center"><img src="docs/images/Eon-alarms.jpg" width="100%" alt="Eon alarm ekranı" /></p>
 
 Alarm sistemi yalnızca basit bir saat seçiciden ibaret değildir. Belirli bir tarihte tek seferlik alarm kurabilir, dakikalık/saatlik/günlük aralıklarla tekrar ettirebilir, 3/5/10 tekrar veya iptale kadar çalışma seçebilir ve Windows sistem sesleri arasında geçiş yapabilirsin. Alarm çalarken 5 dakika erteleme de desteklenir.
 
 ### 6. Defter & Vault — yerel, bağlantılı not sistemi
 
-<p align="center"><img src="docs/images/omni-notes.jpg" width="100%" alt="Omni Defter ve Vault" /></p>
+<p align="center"><img src="docs/images/Eon-notes.jpg" width="100%" alt="Eon Defter ve Vault" /></p>
 
-Defter bölümü yerel dosya tabanlı bir kişisel bilgi alanıdır. Markdown dosyaların normal dosya olarak kalır; Omni bunun üzerine modern düzenleme, canlı biçimlendirme ve bağlantılı not araçlarını ekler.
+Defter bölümü yerel dosya tabanlı bir kişisel bilgi alanıdır. Markdown dosyaların normal dosya olarak kalır; Eon bunun üzerine modern düzenleme, canlı biçimlendirme ve bağlantılı not araçlarını ekler.
 
 - WYSIWYG odaklı Markdown düzenleme ve okuma modu.
 - `[[wikilink]]`, backlink ve ilişki grafiği.
@@ -102,9 +102,9 @@ Defter bölümü yerel dosya tabanlı bir kişisel bilgi alanıdır. Markdown do
 - Kod blokları, listeler, görevler, tablolar ve zengin metin araçları.
 - Vault klasörünü Windows Explorer'da kullanmaya devam edebilme.
 
-### 7. Dosya Paylaşımı — LocalSend mantığı, Omni deneyimi
+### 7. Dosya Paylaşımı — LocalSend mantığı, Eon deneyimi
 
-<p align="center"><img src="docs/images/omni-localsend.jpg" width="100%" alt="Omni LocalSend dosya paylaşımı" /></p>
+<p align="center"><img src="docs/images/Eon-localsend.jpg" width="100%" alt="Eon LocalSend dosya paylaşımı" /></p>
 
 Aynı Wi‑Fi ağındaki cihazları keşfet, hedefi seç ve metin ya da dosya gönder. Yerel cihazlar düşük gecikmeli LAN aktarımını kullanırken eşleştirilmiş cihazlar gerektiğinde bulut kuyruğu üzerinden de hedeflenebilir.
 
@@ -114,31 +114,31 @@ Aynı Wi‑Fi ağındaki cihazları keşfet, hedefi seç ve metin ya da dosya g�
 - Otomatik kabul seçeneği ve indirilenler klasörüne hızlı erişim.
 - Yerel ve eşleştirilmiş cihazların tek cihaz listesinde görünmesi.
 
-### 8. Uzak Bağlantı — telefonunu Omni kumandasına çevir
+### 8. Uzak Bağlantı — telefonunu Eon kumandasına çevir
 
-<p align="center"><img src="docs/images/omni-remote.jpg" width="100%" alt="Omni mobil kumanda ve uzak bağlantı" /></p>
+<p align="center"><img src="docs/images/Eon-remote.jpg" width="100%" alt="Eon mobil kumanda ve uzak bağlantı" /></p>
 
-Telefon veya başka bir cihaz QR/eşleştirme bağlantısıyla Omni'ye bağlanabilir. Yerel ağda PC ekranını görüntüleme, mouse hareketleri ve klavye girdisi gibi masaüstü kontrolleri; uzaktan güç komutları ve bildirim aktarımıyla aynı cihaz altyapısını paylaşır. Güvenilen cihazlar Ayarlar'dan ayrı ayrı iptal edilebilir.
+Telefon veya başka bir cihaz QR/eşleştirme bağlantısıyla Eon'ye bağlanabilir. Yerel ağda PC ekranını görüntüleme, mouse hareketleri ve klavye girdisi gibi masaüstü kontrolleri; uzaktan güç komutları ve bildirim aktarımıyla aynı cihaz altyapısını paylaşır. Güvenilen cihazlar Ayarlar'dan ayrı ayrı iptal edilebilir.
 
 ### 9. Ayarlar — görünümden bağlantıya tek merkez
 
-<p align="center"><img src="docs/images/omni-settings.jpg" width="100%" alt="Omni ayarlar ve temalar" /></p>
+<p align="center"><img src="docs/images/Eon-settings.jpg" width="100%" alt="Eon ayarlar ve temalar" /></p>
 
 Ayarlar ekranı beş net bölüme ayrılır: **Genel, Görünüm, Bildirimler, Cihazlar ve Bağlantı**. Windows ile otomatik başlatma, tema seçimi, PC bildirim aynalama, cihaz eşleştirme, mobil ekran kontrolü ve opsiyonel Supabase bağlantısı aynı alandan yönetilir.
 
 ### 10. Global Arama — `Ctrl + K` ile her yere ulaş
 
-<p align="center"><img src="docs/images/omni-search.jpg" width="100%" alt="Omni global arama ve hızlı geçiş" /></p>
+<p align="center"><img src="docs/images/Eon-search.jpg" width="100%" alt="Eon global arama ve hızlı geçiş" /></p>
 
-Omni'nin hızlı değiştiricisi uygulama modlarını, ayarları, komutları ve Vault notlarını tek aramada bulur. Sonuç yoksa aynı alan web aramasına dönüşür. Klavyeden `↑` / `↓`, `Enter` ve `Esc` ile tamamen mouse kullanmadan gezilebilir.
+Eon'nin hızlı değiştiricisi uygulama modlarını, ayarları, komutları ve Vault notlarını tek aramada bulur. Sonuç yoksa aynı alan web aramasına dönüşür. Klavyeden `↑` / `↓`, `Enter` ve `Esc` ile tamamen mouse kullanmadan gezilebilir.
 
 ---
 
 ## Yerel öncelikli tasarım
 
-Omni'nin temel işlevleri bilgisayarın üzerinde çalışır. Tarayıcı oturumu, notlar, alarm ve uygulama durumu yerel çalışma alanında tutulur; yerel dosya paylaşımı ve mobil ekran bağlantısı LAN üzerinden çalışabilir. Supabase tabanlı uzaktan eşleştirme/senkronizasyon ise **isteğe bağlıdır** ve yalnızca kullanıcı yapılandırdığında devreye girer.
+Eon'nin temel işlevleri bilgisayarın üzerinde çalışır. Tarayıcı oturumu, notlar, alarm ve uygulama durumu yerel çalışma alanında tutulur; yerel dosya paylaşımı ve mobil ekran bağlantısı LAN üzerinden çalışabilir. Supabase tabanlı uzaktan eşleştirme/senkronizasyon ise **isteğe bağlıdır** ve yalnızca kullanıcı yapılandırdığında devreye girer.
 
-Uyumluluğu korumak için bazı dahili kimlikler ve veri yolları hâlâ `kapanis` adını taşır. Bu, eski kurulumların yerel verilerini, derin bağlantılarını ve eşleştirmelerini kırmadan görünen ürün adının **Omni** olarak değişmesini sağlar.
+Uyumluluğu korumak için bazı dahili kimlikler ve veri yolları hâlâ `kapanis` adını taşır. Bu, eski kurulumların yerel verilerini, derin bağlantılarını ve eşleştirmelerini kırmadan görünen ürün adının **Eon** olarak değişmesini sağlar.
 
 ## Teknoloji ve mimari
 
@@ -158,7 +158,7 @@ Uyumluluğu korumak için bazı dahili kimlikler ve veri yolları hâlâ `kapani
 
 Windows kurulum paketleri GitHub Releases üzerinden yayınlanır:
 
-**[→ En güncel Omni sürümünü indir](https://github.com/geniusprr/Shutty/releases/latest)**
+**[→ En güncel Eon sürümünü indir](https://github.com/geniusprr/Shutty/releases/latest)**
 
 > Windows installer şu anda kod imzalı değilse SmartScreen “bilinmeyen yayıncı” uyarısı gösterebilir. Kaynaktan derlemeyi tercih ediyorsan aşağıdaki geliştirme adımlarını kullanabilirsin.
 
@@ -188,7 +188,7 @@ npm run dist           # Windows NSIS installer
 
 ## Android companion
 
-`mobil/` klasörü Omni'nin Android companion uygulamasını içerir. Mobil istemci eşleştirilmiş bilgisayarlara bağlanmak, güç komutları göndermek, bildirim almak, dosya paylaşmak ve izin verildiğinde PC ekranını kontrol etmek için masaüstü uygulamasıyla birlikte çalışır.
+`mobil/` klasörü Eon'nin Android companion uygulamasını içerir. Mobil istemci eşleştirilmiş bilgisayarlara bağlanmak, güç komutları göndermek, bildirim almak, dosya paylaşmak ve izin verildiğinde PC ekranını kontrol etmek için masaüstü uygulamasıyla birlikte çalışır.
 
 ## Proje yapısı
 
@@ -198,8 +198,8 @@ electron/            Windows/Electron ana süreç servisleri
 shared/              Renderer ↔ Electron ortak sözleşmeleri
 mobil/               Android companion uygulaması
 supabase/             Opsiyonel remote/realtime migration'ları
-vendor/librechat-*    Omni ile paketlenen LibreChat istemcisi
-docs/images/          Bu README'de kullanılan gerçek Omni ekran görüntüleri
+vendor/librechat-*    Eon ile paketlenen LibreChat istemcisi
+docs/images/          Bu README'de kullanılan gerçek Eon ekran görüntüleri
 ```
 
 ## Lisans
@@ -209,6 +209,6 @@ MIT — ayrıntılar için [`LICENSE`](LICENSE) dosyasına bakın.
 ---
 
 <div align="center">
-  <strong>Omni</strong><br />
+  <strong>Eon</strong><br />
   <sub>Bir sürü küçük araç yerine, tek bir kişisel çalışma alanı.</sub>
 </div>
