@@ -1,9 +1,9 @@
 {
   "name": "eon",
-  "version": "1.2.0",
+  "version": "2.0.0-preview.1",
   "private": true,
   "main": "dist-electron/electron/main.js",
-  "description": "Eon — Windows için tarayıcı, yapay zekâ, dosya paylaşımı, uzaktan erişim, medya, alarm ve güç yönetimini tek masaüstünde birleştiren kişisel çalışma alanı.",
+  "description": "Eon — Windows ve Android arasında Deck, notlar, AI, dosya aktarımı ve cihaz kontrolü.",
   "author": "Eon contributors",
   "license": "MIT",
   "engines": {
@@ -19,7 +19,8 @@
     "test:browser": "npm run build && node electron/browser-smoke-runner.mjs",
     "stage:mobile": "node build/stage-mobile.mjs",
     "stage:scrcpy": "node build/stage-scrcpy.mjs",
-    "dist": "npm run build && npm run stage:mobile && npm run stage:scrcpy && electron-builder --win nsis --publish never"
+    "dist": "npm run build && npm run stage:mobile && npm run stage:scrcpy && electron-builder --win nsis --publish never",
+    "test:eon2": "node build/test-eon2.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -79,6 +80,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
+    "tsx": "4.20.6",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   },

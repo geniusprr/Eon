@@ -18,7 +18,14 @@ jobs:
         run: npm ci
       - name: Test application
         run: npm test
+      - name: Test Eon 2 services and shared layouts
+        run: npm run test:eon2
       - name: Build Electron application
         run: npm run build
       - name: Browser lifecycle smoke test
         run: npm run test:browser
+      - name: Eon 2 Deck desktop smoke
+        shell: pwsh
+        run: |
+          $process = Start-Process node_modules/electron/dist/electron.exe -ArgumentList 'electron/eon2/deck-mirror-smoke.cjs' -Wait -PassThru -WindowStyle Hidden
+          exit $process.ExitCode

@@ -1,5 +1,19 @@
 # Değişiklikler
 
+## 2.0.0-preview.1 — 2026-11-13
+
+Eon 2'nin ilk ön sürümü. Kararlı sürüm veya imzalı üretim dağıtımı değildir.
+
+- Windows ve Android için ortak, çok ekranlı Deck ve düzenlenebilir Kısayollar ekranı.
+- Eon Notes: SQLite revizyon geçmişi, Markdown çalışma alanı ve çakışma çözümü.
+- OpenRouter bağlantısı, model seçimi ve uygulama araçlarıyla Eon AI.
+- USB eşleştirme, cihaz izinleri, dosya aktarımı ve isteğe bağlı Tailscale HTTPS bağlantısı.
+- scrcpy telefon ekranı ve oturum onaylı PC ekranı altyapısı.
+- Yenilenen GitHub tanıtımı, altı güncel ekran görüntüsü ve Türkçe kullanım rehberi.
+
+Windows kurulum paketi kod imzasızdır. Android companion geliştirme paketidir.
+v1 Vault otomatik geçişi sunulmaz. Ayrıntılar: [yayın doğrulama kaydı](docs/eon2/RELEASE-20261113.md).
+
 ## 1.2.0 — 2026-09-26
 
 - Uygulama genelinde Omni markası Eon olarak yenilendi.

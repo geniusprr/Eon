@@ -1,214 +1,109 @@
 <div align="center">
-  <img src="app-icon.png" width="96" alt="Eon uygulama simgesi" />
-
-  <h1>Eon</h1>
-
-  <p><strong>Windows için kişisel çalışma alanın.</strong></p>
-  <p>Tarayıcı, yapay zekâ, notlar, dosya paylaşımı, uzaktan erişim, medya, alarm ve güç yönetimi — tek, sakin ve modern masaüstünde.</p>
-
-  <p>
-    <img alt="Windows 10 ve 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows11&logoColor=white" />
-    <img alt="Electron 43" src="https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white" />
-    <img alt="React 18" src="https://img.shields.io/badge/React-18-149ECA?logo=react&logoColor=white" />
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" />
-    <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-white" />
-  </p>
-
-  <p>
-    <a href="https://github.com/geniusprr/Shutty/releases/latest"><strong>İndir</strong></a>
-    · <a href="#uygulama-turu">Uygulama turu</a>
-    · <a href="#teknoloji-ve-mimari">Mimari</a>
-    · <a href="#geliştirme">Geliştirme</a>
-  </p>
+  <img src="app-icon.png" width="88" alt="Eon simgesi" />
+  <h1>Eon 2</h1>
+  <p><strong>Bilgisayarın ve telefonun. Aynı çalışma alanı.</strong></p>
+  <p>Kişiselleştirilebilir Deck, bağlantılı notlar, Eon AI ve cihaz kontrolü.</p>
+  <p>Windows x64 · Android 8.0+ · Türkçe · Açık kaynak</p>
+  <p><a href="https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.1"><strong>Eon 2 ön sürümünü indir</strong></a> · <a href="docs/USAGE.tr.md">Kullanım rehberi</a> · <a href="#geliştirme">Geliştirme</a></p>
 </div>
 
-<p align="center">
-  <img src="docs/images/omni-home.jpg" width="100%" alt="Eon ana sayfa" />
-</p>
+![Eon 2 Dashboard](docs/images/eon2-dashboard.png)
 
-## Eon nedir?
+> **v2.0.0-preview.1 — Eon 2'nin ilk ön sürümü.** Bu bir kararlı sürüm değildir. Windows paketi kod imzasızdır; Android companion geliştirme anahtarıyla imzalanmıştır. Önceki v1 yayınları korunur. [Doğrulama ve sınırlar](docs/eon2/RELEASE-20261113.md).
 
-Eon, Windows üzerinde günlük kullandığın araçları ayrı ayrı pencerelere dağıtmak yerine tek bir masaüstü kabuğunda birleştiren yerel bir çalışma alanıdır. Gerçek Chromium tabanlı tarayıcı sekmeleri, gömülü LibreChat, Markdown/Vault not sistemi, LocalSend uyumlu dosya aktarımı, mobil kumanda, güç zamanlayıcıları, alarmlar ve medya kontrolleri aynı arayüz diliyle birlikte çalışır.
+## Eon ile neler yapabilirsin?
 
-Eon bir web sayfasını masaüstü uygulaması gibi gösteren basit bir wrapper değildir. Electron ana süreci tarayıcı yaşam döngüsünü, Windows entegrasyonlarını, yerel sunucuları, bildirimleri, dosya aktarımını ve sistem işlemlerini yönetirken React arayüzü bütün bu yetenekleri tek bir deneyimde toplar.
+Eon, Windows bilgisayarını ve Android telefonunu ortak bir çalışma alanında buluşturur. Masaüstünde düzenlediğin Deck'i telefonda kullanabilir, notlarınla çalışabilir, izin verdiğin PC kısayollarını çalıştırabilir ve dosya aktarabilirsin. USB ile başla; kablosuz kullanım için isteğe bağlı Tailscale bağlantısını yapılandır.
 
-| Çalışma alanı | Ne sunuyor? | Öne çıkanlar |
-| --- | --- | --- |
-| **Ana Sayfa** | Günlük kontrol merkezi | Widget düzeni, hızlı erişim, görevler, hava, müzik, notlar, cihazlar |
-| **Tarayıcı** | Yerleşik Chromium deneyimi | Gerçek sekmeler, geçmiş, indirmeler, izinler, medya ve oturum geri yükleme |
-| **AI · LibreChat** | Yerel AI çalışma alanı | OpenRouter, OpenAI, Anthropic, Gemini, Mistral, Groq, Ollama ve custom endpoint |
-| **Defter** | Yerel bilgi sistemi | Markdown, WYSIWYG, wikilink, backlink, graph, hızlı arama ve dosya ağacı |
-| **Paylaşım** | Cihazlar arası aktarım | LocalSend/LAN, metin ve dosya gönderimi, eşleştirilmiş cihaz kuyruğu |
-| **Mobil Kumanda** | PC'ye uzaktan erişim | Eşleştirme, ekran görüntüleme, mouse/klavye ve güç komutları |
-| **Güç & Alarm** | Windows zamanlama araçları | Kapatma, yeniden başlatma, tek seferlik ve tekrarlayan alarmlar |
-| **Ayarlar** | Tek merkezden yapılandırma | Temalar, bildirimler, cihazlar, bağlantılar ve başlangıç davranışı |
-
----
-
-## Uygulama turu
-
-### 1. Ana Sayfa — her şeyin başladığı yer
-
-<p align="center"><img src="docs/images/omni-home.jpg" width="100%" alt="Eon Ana Sayfa dashboard" /></p>
-
-Ana sayfa, Eon'nin kontrol merkezi. Üç kolonlu sürüklenebilir widget düzeni; yer imlerini, hızlı erişim kısayollarını, görevleri, son notu, bağlı cihazları, güç sayacını, hava durumunu ve çalan medyayı aynı bakışta gösterir. Widget'lar kişiselleştirilebilir; sık kullanılan programlar ve web siteleri doğrudan buradan açılabilir.
-
-- Google/adres araması için ana ekranda gerçek tarayıcı arama çubuğu ve `Ctrl + L` desteği.
-- Program ve web sitesi kısayolları için özelleştirilebilir Hızlı Erişim alanı.
-- Görev, not, cihaz, hava durumu, müzik ve güç widget'ları.
-- Obsidyen, Pembe, Mor, Okyanus ve Açık tema seçenekleri.
-
-### 2. Tarayıcı — uygulamanın içinde gerçek web
-
-<p align="center"><img src="docs/images/omni-browser.jpg" width="100%" alt="Eon yerleşik tarayıcı" /></p>
-
-Eon'nin tarayıcısı Electron'un native Chromium yüzeyini kullanır. Web içeriği React içinde taklit edilmez; her sekme gerçek bir tarayıcı yaşam döngüsüne sahiptir ve uygulama kabuğuyla senkron çalışır.
-
-- Çoklu sekme, sabitleme, çoğaltma, sessize alma ve sekme oturumu geri yükleme.
-- Geri/ileri, yenile, Eonbox, favicon, popup ve fullscreen yönetimi.
-- Geçmiş, indirmeler ve site izinleri için kalıcı yerel durum.
-- Aktif medya algılama ve ana sayfadaki Müzik widget'ıyla senkron kontrol.
-- Son sekme kapandığında Eon ana sayfasına doğal geri dönüş.
-
-### 3. AI · LibreChat — model bağımsız çalışma alanı
-
-<p align="center"><img src="docs/images/omni-librechat.jpg" width="100%" alt="Eon LibreChat AI çalışma alanı" /></p>
-
-Eon, resmi LibreChat istemcisini kendi yerel AI katmanıyla birlikte çalıştırır. Ayrı Docker kurulumu veya dışarıda açık bırakılması gereken bir LibreChat sunucusu gerekmeden uygulamanın içinde ayrı bir native çalışma alanı olarak açılır.
-
-Desteklenen sağlayıcılar: **OpenRouter, OpenAI, Anthropic, Google Gemini, Mistral, Groq, Ollama** ve OpenAI uyumlu **custom endpoint**. Konuşmalar ve model yapılandırması yerel uygulama katmanı üzerinden yönetilir.
-
-### 4. Güç & Zamanlayıcı — Windows planlarını sadeleştir
-
-<p align="center"><img src="docs/images/omni-power.jpg" width="100%" alt="Eon güç zamanlayıcısı" /></p>
-
-Kapatma ve yeniden başlatma planlarını Windows'a doğrudan uygular. 15 dakika, 30 dakika, 1 saat ve 2 saat hazır süreleri kullanabilir veya saat/dakika/saniyeyi kendin belirleyebilirsin. Plan aktifken kalan süre görünür ve tek tıkla iptal edilebilir; pencere kapansa bile sistem planı devam eder.
-
-### 5. Alarmlar — tek seferlik veya tekrarlayan
-
-<p align="center"><img src="docs/images/omni-alarms.jpg" width="100%" alt="Eon alarm ekranı" /></p>
-
-Alarm sistemi yalnızca basit bir saat seçiciden ibaret değildir. Belirli bir tarihte tek seferlik alarm kurabilir, dakikalık/saatlik/günlük aralıklarla tekrar ettirebilir, 3/5/10 tekrar veya iptale kadar çalışma seçebilir ve Windows sistem sesleri arasında geçiş yapabilirsin. Alarm çalarken 5 dakika erteleme de desteklenir.
-
-### 6. Defter & Vault — yerel, bağlantılı not sistemi
-
-<p align="center"><img src="docs/images/omni-notes.jpg" width="100%" alt="Eon Defter ve Vault" /></p>
-
-Defter bölümü yerel dosya tabanlı bir kişisel bilgi alanıdır. Markdown dosyaların normal dosya olarak kalır; Eon bunun üzerine modern düzenleme, canlı biçimlendirme ve bağlantılı not araçlarını ekler.
-
-- WYSIWYG odaklı Markdown düzenleme ve okuma modu.
-- `[[wikilink]]`, backlink ve ilişki grafiği.
-- Klasör/dosya ağacı, sekmeler, hızlı değiştirici ve içerik araması.
-- Kod blokları, listeler, görevler, tablolar ve zengin metin araçları.
-- Vault klasörünü Windows Explorer'da kullanmaya devam edebilme.
-
-### 7. Dosya Paylaşımı — LocalSend mantığı, Eon deneyimi
-
-<p align="center"><img src="docs/images/omni-localsend.jpg" width="100%" alt="Eon LocalSend dosya paylaşımı" /></p>
-
-Aynı Wi‑Fi ağındaki cihazları keşfet, hedefi seç ve metin ya da dosya gönder. Yerel cihazlar düşük gecikmeli LAN aktarımını kullanırken eşleştirilmiş cihazlar gerektiğinde bulut kuyruğu üzerinden de hedeflenebilir.
-
-- Yerel ağ taraması ve manuel IP ile cihaz ekleme.
-- Metin, bağlantı, fotoğraf, video, PDF ve diğer dosyaları gönderme.
-- Sürükle-bırak dosya seçimi ve alınanlar geçmişi.
-- Otomatik kabul seçeneği ve indirilenler klasörüne hızlı erişim.
-- Yerel ve eşleştirilmiş cihazların tek cihaz listesinde görünmesi.
-
-### 8. Uzak Bağlantı — telefonunu Eon kumandasına çevir
-
-<p align="center"><img src="docs/images/omni-remote.jpg" width="100%" alt="Eon mobil kumanda ve uzak bağlantı" /></p>
-
-Telefon veya başka bir cihaz QR/eşleştirme bağlantısıyla Eon'ye bağlanabilir. Yerel ağda PC ekranını görüntüleme, mouse hareketleri ve klavye girdisi gibi masaüstü kontrolleri; uzaktan güç komutları ve bildirim aktarımıyla aynı cihaz altyapısını paylaşır. Güvenilen cihazlar Ayarlar'dan ayrı ayrı iptal edilebilir.
-
-### 9. Ayarlar — görünümden bağlantıya tek merkez
-
-<p align="center"><img src="docs/images/omni-settings.jpg" width="100%" alt="Eon ayarlar ve temalar" /></p>
-
-Ayarlar ekranı beş net bölüme ayrılır: **Genel, Görünüm, Bildirimler, Cihazlar ve Bağlantı**. Windows ile otomatik başlatma, tema seçimi, PC bildirim aynalama, cihaz eşleştirme, mobil ekran kontrolü ve opsiyonel Supabase bağlantısı aynı alandan yönetilir.
-
-### 10. Global Arama — `Ctrl + K` ile her yere ulaş
-
-<p align="center"><img src="docs/images/omni-search.jpg" width="100%" alt="Eon global arama ve hızlı geçiş" /></p>
-
-Eon'nin hızlı değiştiricisi uygulama modlarını, ayarları, komutları ve Vault notlarını tek aramada bulur. Sonuç yoksa aynı alan web aramasına dönüşür. Klavyeden `↑` / `↓`, `Enter` ve `Esc` ile tamamen mouse kullanmadan gezilebilir.
-
----
-
-## Yerel öncelikli tasarım
-
-Eon'nin temel işlevleri bilgisayarın üzerinde çalışır. Tarayıcı oturumu, notlar, alarm ve uygulama durumu yerel çalışma alanında tutulur; yerel dosya paylaşımı ve mobil ekran bağlantısı LAN üzerinden çalışabilir. Supabase tabanlı uzaktan eşleştirme/senkronizasyon ise **isteğe bağlıdır** ve yalnızca kullanıcı yapılandırdığında devreye girer.
-
-Uyumluluğu korumak için bazı dahili kimlikler ve veri yolları hâlâ `kapanis` adını taşır. Bu, eski kurulumların yerel verilerini, derin bağlantılarını ve eşleştirmelerini kırmadan görünen ürün adının **Eon** olarak değişmesini sağlar.
-
-## Teknoloji ve mimari
-
-| Katman | Teknoloji / yaklaşım |
+| Alan | Güncel Eon 2 deneyimi |
 | --- | --- |
-| Masaüstü kabuğu | Electron 43, native Windows pencere ve tray entegrasyonu |
-| Arayüz | React 18, TypeScript 5.7, Vite 6, Radix/shadcn tabanlı bileşenler |
-| Tarayıcı | Chromium `BrowserView` / native `webContents`, ayrı sekme yaşam döngüsü |
-| AI | Bundled LibreChat istemcisi + yerel `AiStore` + çoklu sağlayıcı desteği |
-| Notlar | Yerel Vault, CodeMirror 6, Markdown parser, wikilink/backlink/graph |
-| Dosya aktarımı | LAN discovery + LocalSend akışı + eşleştirilmiş cihaz transfer kuyruğu |
-| Mobil / Remote | Yerel HTTP/WebSocket katmanı, güvenilen cihaz sistemi, Android companion |
-| Opsiyonel bulut | Supabase Realtime ve eşleştirme altyapısı |
-| Test | TypeScript build, birim testleri, Electron browser lifecycle smoke testleri |
+| **Deck / Dashboard** | Düzenlenebilir kartlar, birden fazla ekran, sistem göstergeleri, saat, medya ve hızlı eylemler |
+| **Eon Notes** | Markdown düzenleme, klasörler, not geçmişi ve çakışma çözümü |
+| **Eon AI** | OpenRouter hesabı veya API anahtarı, model seçimi ve uygulama araçları |
+| **Cihazlar** | USB cihaz keşfi, Android kurulumu, eşleştirme ve cihaz başına izinler |
+| **PC Kısayolları** | Telefonda kullanılabilecek eylemleri seçme ve düzenleme |
+| **Dosya Aktarımı** | İzin verilen cihazlarla çift yönlü aktarım ve hedef klasör seçimi |
+| **Ekran bağlantısı** | scrcpy ile Android ekranı; ayrı oturum onayıyla PC ekranı ve kontrolü |
+| **Ayarlar** | Beş tema, Cam / Sistem / Opak yüzeyler, başlangıç ve ayar aktarımı |
 
-## Kurulum
+## Kendine ait bir Deck
 
-Windows kurulum paketleri GitHub Releases üzerinden yayınlanır:
+Dashboard'daki panel düzenleyicisini aç, kartları taşı ve boyutlandır; düzeni kaydet. Ekran seçicisiyle paneller arasında geç. **Kısayollar** ekranında eylemleri seçip sırala. Masaüstü ve Android aynı Deck düzen sözleşmesini kullanır.
 
-**[→ En güncel Eon sürümünü indir](https://github.com/geniusprr/Eon/releases/latest)**
+![Deck düzenleme görünümü](docs/images/eon2-deck-editing.png)
 
-> Windows installer şu anda kod imzalı değilse SmartScreen “bilinmeyen yayıncı” uyarısı gösterebilir. Kaynaktan derlemeyi tercih ediyorsan aşağıdaki geliştirme adımlarını kullanabilirsin.
+## Notlarına yer aç
 
-### Gereksinimler
+Eon Notes'ta not oluştur, Markdown ile yaz ve geçmişini incele. Aynı not iki cihazda farklı düzenlendiğinde çakışmayı gözden geçir. Eon 2'nin SQLite not deposu eski v1 Vault klasöründen ayrıdır; **otomatik v1 geçişi sunulmaz**. Önemli notlarının ayrıca yedeğini tut.
 
-- Windows 10 veya Windows 11
-- Kaynaktan geliştirme için Node.js 22+
-- Android companion derlemek istersen Android Studio / uygun Android SDK
+![Eon Notes çalışma alanı](docs/images/eon2-notes.png)
+
+## Eon AI ile çalış
+
+Eon AI bölümündeki OpenRouter ayarlarından hesabını bağla veya kendi API anahtarını ekle. Model seçerek sohbet et. Model kullanımı sağlayıcının ücretlerine ve internet bağlantısına bağlıdır. İstek içeriği OpenRouter'a ve seçilen model sağlayıcısına gönderilir.
+
+![Eon AI başlangıç görünümü](docs/images/eon2-ai.png)
+
+## Bağlantıların senin kontrolünde
+
+USB üzerinden telefonunu bul, Eon companion'ı kur ve eşleştirme isteğini diğer cihazda kabul et. Not, aktarım ve kontrol izinlerini **Cihazlar** bölümünden yönet. Android ekranı için USB hata ayıklama yetkisi gerekir; PC ekranı oturumu ayrıca masaüstü onayı ister.
+
+![Eon cihaz bağlantıları](docs/images/eon2-devices.png)
+
+## Açık veya koyu, sana göre
+
+Obsidian, Okyanus, Mor aurora, Gün batımı ve Aydınlık temaları arasından seçim yap. Cam, Sistem ve Opak yüzey seçeneklerini Ayarlar'dan değiştir.
+
+![Eon görünüm ayarları](docs/images/eon2-settings.png)
+
+## İndir ve başla
+
+1. [Eon 2 ön sürüm sayfasından](https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.1) `Eon-Setup-2.0.0-preview.1.exe` dosyasını indir ve kur. Windows 10/11 x64 gerekir.
+2. Eon'u aç. Telefon olmadan Dashboard, yerel notlar ve ayarlarla başlayabilirsin.
+3. Telefonda geliştirici seçeneklerinden **USB hata ayıklama**yı aç; veri kablosuyla bağla ve bilgisayarın hata ayıklama isteğini telefonda onayla.
+4. Eon → **Cihazlar** bölümünden **Eon'u kur** seçeneğini kullan. Alternatif olarak yayındaki `Eon-Android-preview.apk` dosyasını telefona kur.
+5. Eon iki cihazda açıkken **Eşleştir**'i seç ve isteği diğer cihazda kabul et. Gerekli izinleri aç.
+6. Telefonda yön işaretli Eon düğmesiyle yatay Deck'e geç. Ekranlar arasında kaydır veya ekran seçicisini kullan.
+
+**[→ Ayrıntılı kullanım, bağlantı sorunları ve yedekleme rehberi](docs/USAGE.tr.md)**
+
+Windows paketi Authenticode imzası taşımaz; SmartScreen yayıncı uyarısı gösterebilir. Android paketi `com.kapanis.mobil.eon2.dev` kimliğiyle kurulur. Bu bir Play Store veya Android üretim sürümü değildir.
+
+## Veriler ve bağlantı modeli
+
+Notlar ve uygulama durumu yerel olarak saklanır. USB bağlantısı uygulama kimlik doğrulaması kullanır; bu tek başına ağ şifrelemesi anlamına gelmez. Tailscale için aynı tailnet, uygun HTTPS sertifikası ve uygulama eşleştirmesi gerekir. Bağlantı portlarını internete açma.
+
+Eon 2'nin varsayılan çalışma yolu eski tarayıcı, LibreChat ve Supabase arayüzlerini başlatmaz. Depoda tutulan eski kaynaklar güncel ürün özellikleri olarak tanıtılmaz. Dahili `kapanis` kimliklerinin bir kısmı uyumluluk için korunur.
 
 ## Geliştirme
+
+Node.js 22+, npm ve Windows gerekir. Android derlemesi için SDK 37 ve Gradle 9.5 / AGP 9.3 ile uyumlu JDK gerekir. Bu yayının yerel derlemesi Android Studio JBR ile yapılmıştır.
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-Yararlı komutlar:
+| Komut | İşlev |
+| --- | --- |
+| `npm run build` | React, TypeScript ve Electron derlemesi |
+| `npm run test:eon2` | Güncel Eon 2 servis, protokol ve düzen testleri |
+| `npm test` | Korunan v1 test grubu |
+| `npm run dist` | Android ve scrcpy kaynaklarıyla Windows NSIS paketi |
 
-```powershell
-npm run build          # TypeScript + Vite + Electron build
-npm test               # Birim testleri
-npm run test:browser   # Gerçek Electron/Chromium lifecycle smoke testi
-npm run dist           # Windows NSIS installer
-```
-
-`npm run dev:ui` yalnızca React renderer'ını açar. Gerçek tarayıcı yüzeyi, Windows entegrasyonu, LibreChat ve sistem özellikleri için `npm run dev` kullan.
-
-## Android companion
-
-`mobil/` klasörü Eon'nin Android companion uygulamasını içerir. Mobil istemci eşleştirilmiş bilgisayarlara bağlanmak, güç komutları göndermek, bildirim almak, dosya paylaşmak ve izin verildiğinde PC ekranını kontrol etmek için masaüstü uygulamasıyla birlikte çalışır.
-
-## Proje yapısı
+`npm run dev:ui` yalnızca renderer önizlemesidir; cihaz ve Windows servisleri için `npm run dev` gerekir. Paketleme öncesinde `ANDROID_HOME`, `JAVA_HOME` ve tam scrcpy dağıtımının yolunu (`EON_SCRCPY_DIST_DIR` veya PATH) ayarla. [Derleme ayrıntıları](docs/eon2/RELEASE-20261113.md).
 
 ```text
-src/                 React arayüzü, özellikler ve tasarım sistemi
-electron/            Windows/Electron ana süreç servisleri
-shared/              Renderer ↔ Electron ortak sözleşmeleri
-mobil/               Android companion uygulaması
-supabase/             Opsiyonel remote/realtime migration'ları
-vendor/librechat-*    Eon ile paketlenen LibreChat istemcisi
-docs/images/          Bu README'de kullanılan gerçek Eon ekran görüntüleri
+src/eon2/            Güncel masaüstü arayüzü
+electron/eon2/       Yerel servisler, cihaz ve not altyapısı
+mobil/              Android Compose companion
+packages/notes-sync/ Ortak not revizyon protokolü
+shared/             Tipli platform sözleşmeleri
+docs/               Kullanım ve doğrulama kayıtları
 ```
 
-## Lisans
+## Katkı ve lisans
 
-MIT — ayrıntılar için [`LICENSE`](LICENSE) dosyasına bakın.
+Sorun bildirirken uygulama sürümünü, işletim sistemini, bağlantı türünü ve tekrar adımlarını [GitHub Issues](https://github.com/geniusprr/Eon/issues) bölümüne ekle. Ekran görüntülerinden kişisel bilgileri ve anahtarları kaldır.
 
----
-
-<div align="center">
-  <strong>Eon</strong><br />
-  <sub>Bir sürü küçük araç yerine, tek bir kişisel çalışma alanı.</sub>
-</div>
+[MIT](LICENSE). Paketlenen üçüncü taraf bileşenler kendi lisanslarına tabidir; dağıtımlarındaki bildirimleri koruyun.

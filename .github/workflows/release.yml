@@ -19,6 +19,27 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        shell: pwsh
+        run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
+      - name: Stage verified scrcpy distribution
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'scrcpy.zip'
+          Invoke-WebRequest 'https://github.com/Genymobile/scrcpy/releases/download/v3.2/scrcpy-win64-v3.2.zip' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'eaa27133e0520979873ba57ad651560a4cc2618373bd05450b23a84d32beafd0') { throw 'scrcpy checksum mismatch' }
+          Expand-Archive $archive (Join-Path $env:RUNNER_TEMP 'scrcpy')
+          "EON_SCRCPY_DIST_DIR=$(Join-Path $env:RUNNER_TEMP 'scrcpy/scrcpy-win64-v3.2')" >> $env:GITHUB_ENV
+      - name: Verify Eon 2
+        run: npm run test:eon2
+      - name: Verify Android companion
+        working-directory: mobil
+        run: ./gradlew.bat :app:testDebugUnitTest :app:lintDebug --console=plain
       - name: Verify bundled LibreChat client
         shell: pwsh
         run: |
@@ -29,13 +50,21 @@ jobs:
         run: npm run dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Attach updater artifacts to GitHub release
+      - name: Stage companion and checksums
+        shell: pwsh
+        run: |
+          Copy-Item build/mobile/Eon-Android.apk release/Eon-Android-preview.apk
+          Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|apk|blockmap)$' -or $_.Name -match '^(latest|preview)\.yml$' } | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content release/SHA256SUMS.txt -Encoding ascii
+      - name: Prepare release for review
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.exe
             release/*.blockmap
             release/latest.yml
-          draft: false
-          prerelease: false
+            release/preview.yml
+            release/*.apk
+            release/SHA256SUMS.txt
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
