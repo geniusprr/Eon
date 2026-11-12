@@ -1,0 +1,61 @@
+.eon2-devices { max-width:920px; margin:0 auto; padding:16px 32px 24px; border-radius:16px; background:var(--e-panel); }
+.eon2-devices-toolbar { display:flex; justify-content:flex-end; margin-bottom:16px; }
+.eon2-devices-list { list-style:none; margin:0; padding:0; }
+.eon2-devices-item { padding:24px 0; border-bottom:1px solid var(--e-stroke); }
+.eon2-devices-row { display:flex; align-items:center; gap:20px; }
+.eon2-devices-row>svg { color:var(--e-muted); flex-shrink:0; }
+.eon2-devices-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.eon2-devices-identity { display:flex; flex:1; flex-direction:column; gap:4px; min-width:0; }
+.eon2-devices-identity strong { font-size:18px; font-weight:600; overflow-wrap:anywhere; }
+.eon2-devices-identity span { color:var(--e-muted); font-size:13px; }
+.eon2-devices-identity .is-connected { color:var(--e-accent-deep); }
+.eon2-phone-install { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0 0 46px; color:var(--e-muted); font-size:13px; }
+.eon2-devices-technical { margin:12px 0 0 46px; color:var(--e-muted); font-size:12px; }
+.eon2-devices-technical summary { cursor:pointer; width:fit-content; padding:4px 0; }
+.eon2-devices-technical p { overflow-wrap:anywhere; margin:8px 0; }
+.eon2-devices-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:280px; padding:32px 16px; text-align:center; }
+.eon2-devices-empty>svg { color:var(--e-muted); margin-bottom:24px; }
+.eon2-devices-empty h1 { font-size:24px; font-weight:600; letter-spacing:-.02em; margin:0 0 12px; }
+.eon2-devices-empty p { color:var(--e-muted); margin:0; font-size:14px; }
+.eon2-devices-empty small { color:var(--e-muted); margin-top:8px; font-size:12px; }
+.eon2-devices-options { margin-top:40px; }
+.eon2-devices-disclosure { border-bottom:1px solid var(--e-stroke); }
+.eon2-devices-disclosure>summary { list-style:none; display:flex; align-items:center; gap:12px; padding:20px 0; cursor:pointer; color:var(--e-muted); font-size:14px; }
+.eon2-devices-disclosure>summary::-webkit-details-marker { display:none; }
+.eon2-devices-disclosure>summary>span { flex:1; }
+.eon2-devices-disclosure>summary>small { color:var(--e-accent-deep); }
+.eon2-devices-disclosure>summary>svg:last-child { transition:transform .15s ease; }
+.eon2-devices-disclosure[open]>summary { color:var(--e-text); }
+.eon2-devices-disclosure[open]>summary>svg:last-child { transform:rotate(180deg); }
+.eon2-devices summary:hover { color:var(--e-text); }
+.eon2-devices summary:focus-visible { outline:2px solid var(--e-accent-deep); outline-offset:4px; border-radius:4px; }
+.eon2-devices-detail-body { padding:0 0 24px 30px; }
+.eon2-devices-detail-body p { color:var(--e-muted); font-size:13px; margin:0 0 8px; overflow-wrap:anywhere; }
+.eon2-devices-paired { padding:0 0 20px; }
+.eon2-devices-paired+.eon2-devices-paired { border-top:1px solid var(--e-stroke); padding-top:20px; }
+.eon2-devices-paired-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.eon2-devices-paired-heading strong { min-width:0; overflow-wrap:anywhere; font-size:14px; }
+.eon2-devices-permissions { border:0; padding:0; margin:12px 0 0; display:flex; gap:24px; flex-wrap:wrap; }
+.eon2-devices-permissions legend { position:absolute; width:1px; height:1px; clip-path:inset(50%); overflow:hidden; }
+.eon2-devices-permissions label { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--e-muted); cursor:pointer; }
+.eon2-devices-permissions input { accent-color:var(--e-accent-deep); width:16px; height:16px; margin:0; }
+.eon2-devices-paired .eon2-devices-technical { margin-left:0; }
+.eon2-devices-wireless { display:flex; align-items:flex-start; gap:24px; }
+.eon2-devices-wireless>div { flex:1; min-width:0; }
+.eon2-devices-wireless strong { display:block; margin-bottom:8px; font-size:14px; }
+.eon2-devices .eon2-phone-surface { border:0; border-radius:0; background:none; padding:8px 0 24px; margin:0; }
+.eon2-devices .eon2-phone-orientation-group>small,
+.eon2-devices .eon2-phone-preview-caption { color:var(--e-muted); }
+@media(max-width:760px) {
+  .eon2-devices { padding:12px 20px 20px; }
+  .eon2-devices-row { gap:12px; flex-wrap:wrap; }
+  .eon2-devices-identity { min-width:160px; }
+  .eon2-devices-actions { flex-basis:100%; margin-left:38px; }
+  .eon2-devices-technical,.eon2-phone-install { margin-left:38px; }
+  .eon2-devices-identity strong { font-size:16px; }
+  .eon2-devices-detail-body { padding-left:0; }
+  .eon2-devices-empty { min-height:240px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .eon2-devices-disclosure>summary>svg:last-child { transition:none; }
+}

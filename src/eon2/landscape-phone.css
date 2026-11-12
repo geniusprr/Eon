@@ -1,0 +1,82 @@
+/* Live phone alongside the landscape control deck, without covering shortcuts. */
+.eon-deck-dashboard {
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 274px);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+.eon-deck-metrics { grid-column: 1; grid-row: 1; }
+.eon-deck-lower { grid-column: 1; grid-row: 2; }
+.eon-deck-phone {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #363746 transparent;
+  background: rgba(23,26,37,.78);
+  border: 1px solid rgba(178,156,255,.19);
+}
+.eon-deck-phone .eon2-phone-surface {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  height: auto;
+  padding: 13px;
+}
+.eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-heading-icon { display:none; }
+.eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-heading-copy { min-width: 95px; }
+.eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-heading h2 { font-size: 14px; }
+.eon-deck-phone .eon2-phone-mode-switch button { font-size: 9px!important; }
+.eon-deck-phone .eon2-phone-picker>svg { display:none; }
+.eon-deck-phone .eon2-phone-picker select { padding-left:12px; }
+.eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-shell { width: min(100%,clamp(145px,20vh,178px)); }
+@media(max-width:1240px) {
+  .eon-deck-dashboard { grid-template-columns:minmax(0,1fr) minmax(210px,250px); grid-template-rows:minmax(270px,1fr) minmax(300px,1fr); height:100%; min-height:600px; }
+  .eon-deck-metrics { grid-column:1; grid-row:1; min-height:270px; }
+  .eon-deck-lower { grid-column:1; grid-row:2; min-height:300px; }
+  .eon-deck-phone { grid-column:2; grid-row:1/span 2; overflow-y:auto; }
+}
+@media(max-width:760px) {
+  /* Keep actionable controls above the fold on 720px-wide windows. */
+  .eon-deck-dashboard {
+    grid-template-columns:minmax(0,1fr) minmax(185px,220px);
+    grid-template-rows:minmax(245px,.9fr) minmax(300px,1.1fr);
+    height:100%; min-height:600px; gap:10px;
+  }
+  .eon-deck-metrics,.eon-deck-dashboard.has-gpu .eon-deck-metrics {
+    grid-column:1;grid-row:1;min-height:0;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    grid-template-rows:88px minmax(0,1fr);
+    gap:7px;
+  }
+  .eon-deck-clock {grid-column:1 / -1;padding:0 8px;}
+  .eon-deck-clock-time {font-size:52px;}
+  .eon-deck-gauge {padding:5px;gap:4px;border-radius:14px;}
+  .eon-deck-gauge-ring {width:min(100%,84px);}
+  .eon-deck-lower {grid-column:1;grid-row:2;min-height:0;grid-template-columns:1fr 1fr;gap:8px;}
+  .eon-deck-media {padding:10px;}
+  .eon-deck-media-controls {gap:2px;}
+  .eon-deck-media-button {width:39px;height:39px;}
+  .eon-deck-media-button.is-prominent {width:44px;height:44px;}
+  .eon-deck-shortcut {padding:6px 4px;gap:4px;}
+  .eon-deck-shortcut>svg:not(.eon-deck-locked) {width:21px;height:21px;}
+  .eon-deck-phone {grid-column:2;grid-row:1/span 2;min-height:0;overflow-y:auto;}
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-body {display:flex;flex-direction:column;gap:10px;}
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-controls {display:flex;flex-direction:column;}
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-preview {width:100%;}
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-shell {width:min(100%,145px);}
+}
+@media(max-width:650px) {
+  .eon-deck-dashboard {
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(245px,auto) minmax(310px,auto) auto;
+    height:auto;min-height:1040px;
+  }
+  .eon-deck-metrics {grid-column:1;grid-row:1;}
+  .eon-deck-lower {grid-column:1;grid-row:2;}
+  .eon-deck-phone {grid-column:1;grid-row:3;overflow-y:visible;}
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-body { display:flex; flex-direction:column; }
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-controls { display:contents; }
+  .eon-deck-phone .eon2-phone-surface.is-compact .eon2-phone-shell { width: min(100%,196px); }
+}

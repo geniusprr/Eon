@@ -39,3 +39,14 @@ vendor/*
 *.sw?
 .DS_Store
 Thumbs.db
+/build/mobile/
+/build/scrcpy/
+
+# Local verification workspaces and packaged application artifacts.
+/build/*/
+/builds/
+
+# Generated QA screenshots, device dumps and diagnostic results.
+/docs/eon2/qa-*/
+/docs/eon2/evidence/
+/electron/eon2/remote/.scrcpy-physical-verified.png

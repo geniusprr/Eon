@@ -1,4 +1,4 @@
-package com.kapanis.mobil
+﻿package com.kapanis.mobil
 
 import android.Manifest
 import android.content.Intent
@@ -24,7 +24,7 @@ import com.kapanis.mobil.service.KapanisNotificationService
 import com.kapanis.mobil.ui.screens.MainScreen
 import com.kapanis.mobil.ui.theme.KapanisTheme
 
-class MainActivity : ComponentActivity() {
+class LegacyMainActivity : ComponentActivity() {
 
     private lateinit var prefs: PreferencesManager
     private val apiClient = KapanisApiClient()
@@ -191,3 +191,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

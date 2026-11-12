@@ -1,0 +1,150 @@
+/* Eon's shared material layer. Blur belongs to floating chrome, never every child. */
+.eon2-app.eon2-app {
+  --glass-chrome:rgba(28,35,48,.66);
+  --glass-content:rgba(20,27,39,.86);
+  --glass-control:rgba(196,216,242,.09);
+  --glass-edge:rgba(223,236,255,.18);
+  --glass-light:rgba(238,246,255,.19);
+  --glass-shadow:0 10px 28px rgba(0,4,15,.22);
+  --glass-sheen:linear-gradient(145deg,rgba(240,248,255,.08),transparent 48%,rgba(211,230,255,.025));
+  --glass-filter:blur(24px) saturate(135%);
+  --e-side:var(--glass-chrome); --e-panel:var(--glass-content);
+  --e-panel-2:var(--glass-control); --e-panel-border:var(--glass-edge); --e-stroke:var(--glass-edge);
+  --e-muted:#bec9d9; --e-subtle:#aab8cc;
+}
+.eon2-app.eon2-theme-light {
+  --glass-chrome:rgba(249,252,255,.72);
+  --glass-content:rgba(249,252,255,.91);
+  --glass-control:rgba(44,68,99,.065);
+  --glass-edge:rgba(55,79,107,.19);
+  --glass-light:rgba(255,255,255,.94);
+  --glass-shadow:0 10px 28px rgba(27,50,76,.09);
+  --glass-sheen:linear-gradient(145deg,rgba(255,255,255,.62),transparent 58%,rgba(255,255,255,.16));
+  --e-muted:#42566d; --e-subtle:#52657b;
+}
+.eon2-app ::selection { background:var(--e-accent-deep); color:var(--e-bg); }
+.eon2-app :is(input,textarea) { caret-color:var(--e-accent-deep); }
+.eon2-app :is(input,textarea)::placeholder { color:var(--e-muted); opacity:1; }
+
+/* A quiet title, a separate connection control, and native Windows caption space. */
+.eon2-app .eon2-topbar {
+  height:64px; min-height:64px; margin:20px 20px 0 20px; padding:0;
+  gap:16px; background:none; border:0; justify-content:space-between;
+}
+.eon2-app.is-desktop-window .eon2-topbar { margin-right:156px; }
+.eon2-title-context {
+  height:64px; min-width:0; display:flex; align-items:center; gap:12px;
+  padding:0 22px; border-radius:18px; font-size:17px; font-weight:650;
+  letter-spacing:-.025em; color:var(--e-text);
+}
+.eon2-title-context svg { color:var(--e-accent-deep); flex:none; }
+.eon2-title-context>span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.eon2-app .eon2-title-connection {
+  display:flex; flex:0 0 136px; align-items:center; justify-content:flex-end; gap:8px;
+  height:40px; padding:0 8px; border:0; border-radius:8px; background:transparent; color:var(--e-muted);
+  font-size:12px; font-weight:550; -webkit-app-region:no-drag;
+}
+.eon2-title-status-label { white-space:nowrap; }
+.eon2-app .eon2-title-status-dot {
+  flex:none; width:6px; height:6px; border-radius:50%; background:#e6b57c;
+}
+.eon2-app .eon2-title-status-dot.is-connected { background:#78d8b0; }
+
+.eon2-app :is(.eon2-logo,.eon2-nav,.eon2-sidebar-bottom,.eon2-title-context) {
+  background-color:var(--glass-chrome); background-image:var(--glass-sheen);
+  border:1px solid var(--glass-edge);
+  box-shadow:inset 0 1px 0 var(--glass-light),var(--glass-shadow);
+  backdrop-filter:var(--glass-filter);
+}
+.eon2-app :is(.eon2-logo,.eon2-nav,.eon2-sidebar-bottom) { border-radius:18px; }
+.eon2-app .eon2-nav-item { border-radius:12px; }
+.eon2-app .eon2-nav-item.is-active {
+  background:color-mix(in srgb,var(--e-accent-deep) 17%,var(--glass-control));
+  border-color:color-mix(in srgb,var(--e-accent-deep) 30%,var(--glass-edge));
+  box-shadow:inset 0 1px 0 var(--glass-light);
+}
+.eon2-app :is(.eon2-button,.eon-mirror-button,.eon-mirror-pages button,.eon-mirror-pages select) {
+  border-radius:12px; min-height:40px;
+}
+.eon2-app :is(.eon2-button--outline,.eon-mirror-button,.eon-mirror-pages button,.eon-mirror-pages select) {
+  background-color:var(--glass-chrome); background-image:var(--glass-sheen);
+  border-color:var(--glass-edge); box-shadow:inset 0 1px 0 var(--glass-light);
+}
+.eon2-app :is(.eon2-logo,.eon2-title-connection,.eon2-button,.eon2-nav-item):active:not(:disabled) { transform:scale(.98); }
+.eon2-app .eon2-title-connection:hover { background-color:var(--glass-content); color:var(--e-text); }
+
+/* Content uses the denser material so text stays stable over any wallpaper. */
+.eon2-app :is(.eon2-settings-panel,.eon2-control-card,.eon2-device-card,.eon2-transfer-directory,.eon2-transfer-drop,.eon2-connection-banner,.eon2-action-empty,.eon-notes-workspace) {
+  background-color:var(--glass-content); background-image:var(--glass-sheen);
+  border-color:var(--glass-edge); border-radius:16px;
+  box-shadow:inset 0 1px 0 var(--glass-light),var(--glass-shadow);
+}
+.eon2-app :is(.eon2-control-editor,.eon2-phone-guide,.eon-player-volume-panel,.eon-mirror-presets-menu,.eon-mirror-context-menu) {
+  background-color:var(--glass-content); background-image:var(--glass-sheen);
+  border-color:var(--glass-edge); border-radius:20px;
+  backdrop-filter:var(--glass-filter);
+  box-shadow:inset 0 1px 0 var(--glass-light),0 24px 64px rgba(0,4,15,.28);
+}
+.eon2-app .eon-notes-sidebar { background:var(--glass-control); }
+.eon2-app .eon-notes-workspace { backdrop-filter:blur(16px); }
+.eon2-app .eon2-control-card:hover { transform:none; }
+.eon2-material-picker { display:flex; flex:none; gap:4px; padding:4px; border-radius:14px; background:var(--glass-control); }
+.eon2-material-picker>button { min-height:36px; padding:0 14px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--e-muted); font-size:12px; }
+.eon2-material-picker>button[aria-pressed="true"] { background:var(--glass-content); color:var(--e-text); border-color:var(--glass-edge); box-shadow:inset 0 1px 0 var(--glass-light); }
+
+/* Same material palette and edge light as the Android Desk. No nested blur. */
+.eon2-app .eon-mirror {
+  --mirror-bg:#101925; --mirror-panel:rgba(27,39,56,.84); --mirror-panel-hi:#32445c;
+  --mirror-border:rgba(219,235,255,.21); --mirror-ink:#f2f6fb; --mirror-subtle:#b7c7dc;
+}
+.eon2-app.eon2-theme-light .eon-mirror {
+  --mirror-bg:#e5eef7; --mirror-panel:rgba(250,253,255,.87); --mirror-panel-hi:#d5e2f0;
+  --mirror-border:rgba(56,84,116,.22); --mirror-ink:#1c3047; --mirror-subtle:#4d637c;
+}
+.eon2-app .eon-mirror-display {
+  background:linear-gradient(135deg,var(--mirror-bg),var(--mirror-panel-hi) 52%,var(--mirror-bg));
+}
+.eon2-app .eon-mirror-tile {
+  background-color:var(--mirror-panel); background-image:var(--glass-sheen);
+  border-color:var(--mirror-border);
+  box-shadow:inset 0 1px 0 var(--glass-light),0 6px 18px rgba(0,4,15,.12);
+}
+.eon2-app .eon-mirror-clock time { letter-spacing:-.04em; }
+.eon2-app .eon-player-surface {
+  background-color:var(--mirror-panel); background-image:var(--glass-sheen);
+  box-shadow:inset 0 1px 0 var(--glass-light);
+}
+
+@media(max-width:760px) {
+  .eon2-app .eon2-topbar { margin:16px 12px 0 16px; gap:8px; }
+  .eon2-title-context { padding:0 14px; gap:8px; font-size:14px; }
+}
+@media(max-width:560px) {
+  .eon2-title-status-label { display:none; }
+  .eon2-app .eon2-title-connection { flex-basis:40px; justify-content:center; }
+}
+/* Explicit glass is an app preference; System follows reduced transparency. */
+.eon2-app[data-material="opaque"] { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
+.eon2-app.eon2-theme-light[data-material="opaque"] { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
+.eon2-app[data-material="opaque"] :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+.eon2-app[data-material="opaque"] .eon-notes-workspace { backdrop-filter:none; }
+@media(prefers-reduced-transparency:reduce) {
+  .eon2-app[data-material="system"] { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
+  .eon2-app.eon2-theme-light[data-material="system"] { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
+  .eon2-app[data-material="system"] :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+  .eon2-app[data-material="system"] .eon-notes-workspace { backdrop-filter:none; }
+}
+@media(prefers-contrast:more) {
+  .eon2-app.eon2-app { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
+  .eon2-app.eon2-theme-light { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
+  .eon2-app :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+  .eon2-app .eon-notes-workspace { backdrop-filter:none; }
+}
+@supports not (backdrop-filter:blur(1px)) {
+  .eon2-app.eon2-app { --glass-chrome:#1c2330; --glass-content:#141b27; }
+  .eon2-app.eon2-theme-light { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .eon2-app :is(button,.eon2-sidebar) { transition:none!important; animation:none!important; }
+  .eon2-app :is(.eon2-logo,.eon2-title-connection,.eon2-button,.eon2-nav-item):active:not(:disabled) { transform:none; }
+}

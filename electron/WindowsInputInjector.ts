@@ -10,6 +10,7 @@ export interface DisplayBounds {
 const INPUT_MOUSE = 0
 const INPUT_KEYBOARD = 1
 const MOUSEEVENTF_MOVE = 0x0001
+const KEYEVENTF_EXTENDEDKEY = 0x0001
 const KEYEVENTF_KEYUP = 0x0002
 const KEYEVENTF_UNICODE = 0x0004
 const MOUSEEVENTF_LEFTDOWN = 0x0002
@@ -122,6 +123,8 @@ function normalizeKey(code: string) {
   return value
 }
 
+const mediaVirtualKeys = { previous: 0xb1, playPause: 0xb3, next: 0xb0, mute: 0xad, volumeDown: 0xae, volumeUp: 0xaf } as const
+
 export class WindowsInputInjector {
   private display: DisplayBounds = { x: 0, y: 0, width: 1920, height: 1080 }
   private readonly heldKeys = new Set<number>()
@@ -182,6 +185,15 @@ export class WindowsInputInjector {
       else this.heldKeys.delete(virtualKey)
     }
     return sent
+  }
+
+  mediaKey(key: keyof typeof mediaVirtualKeys) {
+    const virtualKey = mediaVirtualKeys[key]
+    if (!virtualKey) return false
+    return this.send([
+      this.keyboardEvent(virtualKey, 0, KEYEVENTF_EXTENDEDKEY),
+      this.keyboardEvent(virtualKey, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP),
+    ])
   }
 
   text(value: string) {

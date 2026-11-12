@@ -1,0 +1,54 @@
+dialog.eon2-control-editor { width: min(640px, calc(100vw - 40px)); max-height: calc(100dvh - 48px); padding: 28px; box-sizing: border-box; overflow-y: auto; scrollbar-color: var(--e-stroke) transparent; }
+.eon2-control-editor form > header h2 { font-size: 24px; letter-spacing: -.03em; margin: 0; }
+.eon2-action-import { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px dashed var(--e-stroke); border-radius: 12px; background: var(--e-panel); }
+.eon2-action-import > svg { flex: none; color: var(--e-accent-deep); }
+.eon2-action-import strong { font-size: 14px; }
+.eon2-action-import p { margin: 6px 0 0; color: var(--e-muted); font-size: 12px; line-height: 1.6; }
+.eon2-action-import.is-dragging { border-color: var(--e-accent-deep); background: color-mix(in srgb, var(--e-accent-deep) 12%, var(--e-panel)); }
+.eon2-action-detected { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; color: var(--e-accent-deep); }
+.eon2-action-preview { display: flex; align-items: center; gap: 16px; padding: 24px 0; min-width: 0; }
+.eon2-action-preview > span { display: grid; place-items: center; width: 60px; height: 60px; flex: none; border-radius: 14px; color: var(--e-accent-deep); background: color-mix(in srgb, var(--e-accent-deep) 10%, var(--e-panel)); }
+.eon2-action-preview > div { min-width: 0; }
+.eon2-action-preview strong { display: block; font-size: 20px; overflow-wrap: anywhere; line-height: 1.3; }
+.eon2-action-preview small { display: block; color: var(--e-muted); margin-top: 6px; }
+.eon2-icon-picker { padding: 0 0 20px; border-bottom: 1px solid var(--e-stroke); margin-bottom: 8px; }
+.eon2-icon-picker summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 8px 0; }
+.eon2-icon-picker summary span { float: right; color: var(--e-muted); font-size: 12px; font-weight: 400; }
+.eon2-icon-picker .eon2-icon-search { margin: 8px 0 12px; font-size: 12px; }
+.eon2-icon-options { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; max-height: 196px; overflow-y: auto; padding: 4px; }
+.eon2-icon-options button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 62px; padding: 8px 2px; border: 1px solid transparent; border-radius: 9px; background: var(--e-panel); color: var(--e-text); cursor: pointer; }
+.eon2-icon-options button span { font-size: 10px; }
+.eon2-icon-options button:hover:not(:disabled) { background: var(--e-panel-2); border-color: var(--e-stroke); }
+.eon2-icon-options button.is-selected { border-color: var(--e-accent-deep); color: var(--e-accent-deep); background: color-mix(in srgb, var(--e-accent-deep) 9%, var(--e-panel)); }
+.eon2-icon-options button:disabled { opacity: .5; cursor: default; }
+.eon2-icon-picker summary:focus-visible { outline: 2px solid var(--e-accent-deep); outline-offset: 3px; }
+.eon2-control-editor input { caret-color: var(--e-accent-deep); }
+.eon2-control-editor ::selection { background: var(--e-accent-deep); color: var(--e-panel); }
+@media (max-width: 600px) {
+  dialog.eon2-control-editor { padding: 20px; width: calc(100vw - 24px); }
+  .eon2-icon-options { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .eon2-action-import { padding: 16px; gap: 12px; }
+}
+
+.eon2-action-advanced { margin: 16px 0; color: var(--e-muted); font-size: 12px; }
+.eon2-action-advanced summary { cursor: pointer; padding: 4px 0; }
+.eon2-action-advanced label { margin-top: 12px; }
+
+dialog.eon2-control-editor { width: min(860px, calc(100vw - 40px)); background: var(--e-bg); }
+.eon2-action-editor-body { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 28px; padding-top: 24px; }
+.eon2-action-appearance { min-width: 0; }
+.eon2-action-preview { padding: 0 0 20px; gap: 12px; }
+.eon2-action-preview > span { width: 48px; height: 48px; }
+.eon2-action-preview strong { font-size: 17px; }
+.eon2-icon-options { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 284px; gap: 6px; }
+.eon2-icon-options button { min-height: 56px; }
+.eon2-icon-picker { border: 0; padding-bottom: 0; }
+.eon2-icon-picker summary span { display: block; float: none; margin: 6px 0 0 14px; }
+.eon2-action-fields { min-width: 0; }
+.eon2-control-editor form > .eon2-section-actions { position: sticky; bottom: -28px; background: var(--e-bg); padding: 16px 0 0; border-top: 1px solid var(--e-stroke); }
+@media (max-width: 760px) {
+  .eon2-action-editor-body { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .eon2-icon-options { grid-template-columns: repeat(7, minmax(0, 1fr)); max-height: 136px; }
+  .eon2-control-editor form > .eon2-section-actions { bottom: -20px; }
+}
+@media (max-width: 480px) { .eon2-icon-options { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

@@ -1,0 +1,96 @@
+- generic [ref=e3]:
+  - complementary "Ana navigasyon" [ref=e4]:
+    - button "Eon ana sayfa" [ref=e5] [cursor=pointer]
+    - navigation "Çalışma alanları" [ref=e11]:
+      - button "Dashboard" [ref=e12] [cursor=pointer]
+      - button "Eon Notes" [ref=e18] [cursor=pointer]
+      - button "Cihazlar" [ref=e22] [cursor=pointer]
+      - button "PC Kısayolları" [ref=e25] [cursor=pointer]
+      - button "Dosya Aktarımı" [ref=e28] [cursor=pointer]
+      - button "Ayarlar" [ref=e31] [cursor=pointer]
+    - generic [ref=e35]:
+      - group "Windows PC · Bağlantı bekleniyor" [ref=e36]
+      - button "Menüyü genişlet" [ref=e40] [cursor=pointer]
+  - generic [ref=e43]:
+    - banner "Pencere başlığı" [ref=e44]:
+      - generic [ref=e45]: Dashboard
+      - 'button "Cihaz bağlantıları: Cihaz bağlı değil" [ref=e52] [cursor=pointer]':
+        - generic [ref=e55]: Cihaz bağlı değil
+    - main [ref=e57]:
+      - region "Eon telefon Control Deck aynası" [ref=e58]:
+        - generic "Deck ekranları" [ref=e59]:
+          - combobox "Kontrol edilecek ekran" [ref=e60]:
+            - option "Panel" [selected]
+            - option "Tuşlar · tüm komutlar"
+          - button "Düzeni düzenle" [disabled] [ref=e61]
+          - button "Ekran ekle" [disabled] [ref=e72]
+          - button "Çoğalt" [disabled] [ref=e74]
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic "Saat; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e79]:
+              - generic [ref=e80]:
+                - generic [ref=e81]: BUGÜN / ÇALIŞMA ALANI
+                - time [ref=e82]: 14:20
+                - generic [ref=e83]: 12 Kasım Perşembe
+            - generic "CPU; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e92]:
+              - generic [ref=e93]:
+                - strong [ref=e95]: CPU
+                - progressbar "CPU kullanımı" [ref=e97]:
+                  - generic [ref=e101]: —
+            - generic "GPU; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e110]:
+              - generic [ref=e111]:
+                - strong [ref=e113]: GPU
+                - progressbar "GPU kullanımı" [ref=e115]:
+                  - generic [ref=e119]: —
+            - generic "RAM; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e128]:
+              - generic [ref=e129]:
+                - strong [ref=e131]: RAM
+                - progressbar "RAM kullanımı" [ref=e133]:
+                  - generic [ref=e137]: —
+            - generic "Disk; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e146]:
+              - generic [ref=e147]:
+                - strong [ref=e149]: DİSK
+                - progressbar "DİSK kullanımı" [ref=e151]:
+                  - generic [ref=e155]: —
+            - generic "Medya; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e164]:
+              - region "Medya oynatıcı" [ref=e165]:
+                - generic [ref=e167]:
+                  - generic [ref=e173]:
+                    - generic [ref=e174]: Müzik
+                    - strong [ref=e176]: Müziğine yer aç
+                    - generic [ref=e177]:
+                      - generic "Medya kontrolü kullanılamıyor" [ref=e178]
+                      - button "Ses kontrolleri" [disabled] [ref=e179]
+                  - group "Oynatma kontrolleri" [ref=e184]:
+                    - button "Önceki parça" [disabled] [ref=e185]
+                    - button "Oynat" [disabled] [ref=e188]
+                    - button "Sonraki parça" [disabled] [ref=e191]
+            - generic "Hızlı erişim; sürükleyerek taşı, Shift ve ok tuşlarıyla boyutlandır" [ref=e202]: PC bağlantısı bekleniyor
+          - generic [ref=e216]:
+            - generic [ref=e217]: Telefona bağlanmak için Cihazlar bölümünü aç
+            - generic [ref=e220]:
+              - generic [ref=e221]: Panel
+              - generic [ref=e222]: 2 ekran
+            - generic [ref=e223]:
+              - button "Notlar" [ref=e224] [cursor=pointer]
+              - button "Ayarlar" [ref=e227] [cursor=pointer]
+        - status: Eon masaüstü bağlantısı bulunamadı.
+  - dialog "Telefonunu Eon’a bağla" [ref=e231]:
+    - button "Rehberi kapat" [active] [ref=e232] [cursor=pointer]
+    - heading "Telefonunu Eon’a bağla" [level=1] [ref=e239]
+    - list [ref=e240]:
+      - listitem [ref=e241]:
+        - generic [ref=e244]:
+          - strong [ref=e245]: USB hata ayıklamayı aç
+          - paragraph [ref=e246]: Android’de Ayarlar → Telefon hakkında bölümünde Derleme numarasına yedi kez dokun. Geliştirici seçeneklerinden USB hata ayıklamayı aç.
+      - listitem [ref=e247]:
+        - generic [ref=e254]:
+          - strong [ref=e255]: Telefonu USB ile bağla
+          - paragraph [ref=e256]: Bir USB veri kablosu kullan. Telefonunun kilidini aç ve bu bilgisayar için USB hata ayıklama iznini onayla.
+      - listitem [ref=e257]:
+        - generic [ref=e261]:
+          - strong [ref=e262]: Eon’u kur ve eşleştir
+          - paragraph [ref=e263]: Eon iki cihazda da açıkken birinden Eşleştir’e dokun. İsteği karşı cihazda kabul et.
+    - generic [ref=e264]:
+      - button "Daha sonra" [ref=e265] [cursor=pointer]
+      - button "Cihazları aç" [ref=e266] [cursor=pointer]

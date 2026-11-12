@@ -92,7 +92,7 @@ export class WindowManager {
     // Normal launches open maximized. The smoke runner intentionally keeps a
     // deterministic restored window so its fixed WebContentsView bounds remain
     // meaningful and independent of the developer display.
-    if (process.env.KAPANIS_SMOKE_TEST !== '1' && !window.isMaximized()) window.maximize()
+    if (process.env.KAPANIS_SMOKE_TEST !== '1' && !app.commandLine.hasSwitch('background') && !window.isMaximized()) window.maximize()
     window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.key !== 'F11' || input.control || input.alt || input.meta || input.shift) return
       // Electron's default application menu also owns F11 on Windows. Consume

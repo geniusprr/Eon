@@ -11,12 +11,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const dist = path.join(root, 'dist')
 const port = 4179
 const icon = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#60a5fa"/></svg>')
-const smokePage = `<!doctype html><html><head><meta charset="utf-8"><title>Omni smoke</title><link rel="icon" href="data:image/svg+xml,${icon}"><style>
+const smokePage = `<!doctype html><html><head><meta charset="utf-8"><title>Eon smoke</title><link rel="icon" href="data:image/svg+xml,${icon}"><style>
   :root { color-scheme: light dark; }
   html, body { width: 100%; height: 100%; margin: 0; background: rgb(25, 104, 217); color: white; font: 16px system-ui; }
   main { padding: 32px; }
   @media (prefers-color-scheme: dark) { html, body { background: rgb(22, 30, 45); } }
-</style></head><body><main>Omni browser lifecycle smoke test</main></body></html>`
+</style></head><body><main>Eon browser lifecycle smoke test</main></body></html>`
 
 const server = createServer(async (request, response) => {
   const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')

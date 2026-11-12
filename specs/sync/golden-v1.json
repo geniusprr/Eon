@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "canonical": "{\"a\":[\"é\",\"x\\n\"],\"z\":1}",
+  "canonicalSha256": "351ac3d082b8d65dbf4bfba1be5122f4657d615c282df4175a98b1c683b66834",
+  "manifestSha256": "ea39b239c8759f5ab9977b9c05848015df1127662777734d72109b1aeaa0a4f3",
+  "deltaSha256": "b566ba0f3869ee558dc80da573aaad62cb605e2b23f5c4b6d6bc1ee8b1cb33e7",
+  "revision": {
+    "version": 1,
+    "noteId": "note-A",
+    "parents": [],
+    "deleted": false,
+    "body": "Hello\r\nworld\n",
+    "metadata": {
+      "path": "Projeler/İş.md",
+      "tags": ["alpha", "β"]
+    },
+    "id": "fcf009f8c7f9d4011567c248c074df8fa3e5b18f428aefbb3c62d7f1eb21d505"
+  },
+  "operation": {
+    "version": 1,
+    "vaultId": "vault-01",
+    "deviceId": "android-1",
+    "sequence": 1,
+    "revision": {
+      "version": 1,
+      "noteId": "note-A",
+      "parents": [],
+      "deleted": false,
+      "body": "Hello\r\nworld\n",
+      "metadata": {
+        "path": "Projeler/İş.md",
+        "tags": ["alpha", "β"]
+      },
+      "id": "fcf009f8c7f9d4011567c248c074df8fa3e5b18f428aefbb3c62d7f1eb21d505"
+    },
+    "id": "c7be4b0a4a6f6fd34fb7270b7efbc16c4bb801396b01d87926a6660aa27a3b70"
+  }
+}

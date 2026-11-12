@@ -18,6 +18,49 @@ import type {
   TransferItem,
 } from '../src/types.js'
 
+export type { DeckTelemetrySnapshot, DeckDescription, DeckDesktopSnapshot, DeckMediaCommand, DeckCommandRequest } from './eon-deck-telemetry.js'
+
+export type DeckWidgetId = 'clock' | 'cpu' | 'gpu' | 'ram' | 'disk' | 'media' | 'shortcuts'
+export interface DeckLayoutWidget {
+  id: DeckWidgetId
+  x: number
+  y: number
+  w: number
+  h: number
+  visible: boolean
+}
+export interface DeckPage {
+  id: string
+  name: string
+  widgets: DeckLayoutWidget[]
+  quickIds: string[] | null
+}
+/** The PC stores the authoritative Deck and additional named screens. */
+export interface DeckLayout {
+  /** Hides visual shortcut labels across Deck pages; accessible names remain. */
+  hideShortcutNames?: boolean
+  pages?: DeckPage[]
+  version: 1
+  revision: number
+  updatedAt: number
+  widgets: DeckLayoutWidget[]
+  /** Optional ordered command identities. Null/absent uses the first six authorised commands. */
+  quickIds?: string[] | null
+}
+export interface DeckLayoutSetInput {
+  /** Hides visual shortcut labels across Deck pages; accessible names remain. */
+  hideShortcutNames?: boolean
+  pages?: DeckPage[]
+  baseRevision: number
+  widgets: DeckLayoutWidget[]
+  /** Explicit [] means no shortcuts; omission preserves the current selection. */
+  quickIds?: string[] | null
+}
+export interface DeckLayoutConflict {
+  error: 'deck-layout-conflict'
+  layout: DeckLayout
+}
+
 export const REMOTE_DESKTOP_PROTOCOL_VERSION = 1 as const
 export type RemoteDesktopInputMessage = RemoteDesktopInput
 export type RemoteDesktopSignalMessage = RemoteDesktopSignal
@@ -59,7 +102,7 @@ export const APP_EVENTS = {
 } as const
 
 export type AppEventName = (typeof APP_EVENTS)[keyof typeof APP_EVENTS]
-export type DesktopEventName = BrowserEventName | AppEventName
+export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed'
 
 export interface BrowserBounds {
   x: number
@@ -408,6 +451,57 @@ export type IpcChannel =
   | 'youtube-music:set-volume'
   | 'youtube-music:sync-state'
   | 'notes:list'
+  | 'eon2:system-snapshot'
+  | 'eon2:deck:get'
+  | 'eon2:deck:layout:get'
+  | 'eon2:deck:layout:set'
+  | 'eon2:deck:execute'
+  | 'eon2:theme:set'
+  | 'eon2:settings:import'
+  | 'eon2:settings:export'
+  | 'eon2:settings:get'
+  | 'eon2:settings:set'
+  | 'eon2:files:drop'
+  | 'eon2:actions:drop'
+  | 'eon2:pairing:state'
+  | 'eon2:actions:list'
+  | 'eon2:actions:save'
+  | 'eon2:actions:delete'
+  | 'eon2:actions:execute'
+  | 'eon2:actions:pick-app'
+  | 'eon2:files:list'
+  | 'eon2:files:directory'
+  | 'eon2:files:choose-directory'
+  | 'eon2:files:open-directory'
+  | 'eon2:files:open'
+  | 'eon2:files:save-as'
+  | 'eon2:files:offer'
+  | 'eon2:files:cancel'
+  | 'eon2:permissions:set'
+  | 'eon2:devices'
+  | 'eon2:mobile:status'
+  | 'eon2:mobile:install'
+  | 'eon2:mobile:install-apk'
+  | 'eon2:paired-devices'
+  | 'eon2:scrcpy:status'
+  | 'eon2:scrcpy:start'
+  | 'eon2:scrcpy:stop'
+  | 'eon2:scrcpy:mode'
+  | 'eon2:scrcpy:layout'
+  | 'eon2:tailnet:get'
+  | 'eon2:tailnet:refresh'
+  | 'eon2:tailnet:set'
+  | 'eon2:pairing:begin'
+  | 'eon2:pairing:cancel'
+  | 'eon2:pairing:revoke'
+  | 'eon2:notes:list'
+  | 'eon2:notes:conflicts'
+  | 'eon2:notes:manifest'
+  | 'eon2:notes:identity'
+  | 'eon2:notes:resolve'
+  | 'eon2:notes:history'
+  | 'eon2:notes:save'
+  | 'eon2:notes:delete'
   | 'notes:save'
   | 'notes:delete'
   | 'notes:toggle-pin'
@@ -464,6 +558,7 @@ export type IpcChannel =
 
 export interface ElectronDesktopBridge {
   invoke(channel: IpcChannel, payload?: unknown): Promise<unknown>
+  pathsForDroppedFiles?(files: File[]): string[]
   on(event: DesktopEventName, listener: (payload: unknown) => void): () => void
 }
 
