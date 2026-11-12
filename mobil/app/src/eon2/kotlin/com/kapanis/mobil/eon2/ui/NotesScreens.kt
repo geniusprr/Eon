@@ -111,6 +111,29 @@ private fun folderCounts(notes: List<EonLocalNote>, paths: Map<String, String>):
     }
     return counts
 }
+private data class NoteFolders(val counts: Map<String, Int>, val folders: List<String>)
+
+// A notes refresh may rebuild megabytes of identical text. Comparing the list as a
+// Compose remember key would compare every note body on the UI thread.
+private class NoteListIdentity(private val notes: List<EonLocalNote>) {
+    override fun equals(other: Any?): Boolean = other is NoteListIdentity && notes === other.notes
+    override fun hashCode(): Int = System.identityHashCode(notes)
+}
+
+/** Count whitespace-delimited words without building a temporary list for every token. */
+internal fun countNoteWords(text: String): Int {
+    var words = 0
+    var inWord = false
+    text.forEach { char ->
+        if (char.isWhitespace()) inWord = false
+        else if (!inWord) {
+            words++
+            inWord = true
+        }
+    }
+    return words
+}
+
 private fun matchesFolder(note: EonLocalNote, paths: Map<String, String>, folder: String): Boolean {
     val path = folderOf(note, paths)
     return path == folder || (folder.isNotEmpty() && path.startsWith("$folder/"))
@@ -128,7 +151,8 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>,
     var collapsed by remember { mutableStateOf(setOf<String>()) }
     var paths by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var pathsFailed by remember { mutableStateOf(false) }
-    LaunchedEffect(notes.map { it.id to it.revisionId }) {
+    val revisionKeys = remember(NoteListIdentity(notes)) { notes.map { it.id to it.revisionId } }
+    LaunchedEffect(revisionKeys) {
         try {
             paths = withContext(Dispatchers.IO) { loadNotePaths(context, notes) }
             pathsFailed = false
@@ -139,8 +163,15 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>,
             pathsFailed = true
         }
     }
-    val counts = remember(notes, paths) { folderCounts(notes, paths) }
-    val folders = remember(counts) { counts.keys.sortedWith(String.CASE_INSENSITIVE_ORDER) }
+    var noteFolders by remember { mutableStateOf(NoteFolders(emptyMap(), emptyList())) }
+    LaunchedEffect(notes, paths) {
+        noteFolders = withContext(Dispatchers.Default) {
+            val counts = folderCounts(notes, paths)
+            NoteFolders(counts, counts.keys.sortedWith(String.CASE_INSENSITIVE_ORDER))
+        }
+    }
+    val counts = noteFolders.counts
+    val folders = noteFolders.folders
     var shown by remember { mutableStateOf(notes) }
     LaunchedEffect(notes, paths, query, folder, onlyConflicts, alphaSort) {
         if (query.isNotBlank()) delay(130)
@@ -282,6 +313,12 @@ private fun FolderShortcut(label: String, selected: Boolean, onClick: () -> Unit
 private fun FolderTree(folders: List<String>, counts: Map<String, Int>, collapsed: Set<String>, selected: String?,
                        modifier: Modifier = Modifier,
                        onExpand: (String) -> Unit, onSelect: (String) -> Unit) {
+    val parents = remember(folders) {
+        folders.mapNotNullTo(mutableSetOf()) { folder ->
+            val index = folder.lastIndexOf('/')
+            if (index > 0) folder.substring(0, index) else null
+        }
+    }
     val visible = remember(folders, collapsed) {
         folders.filter { folder ->
             val segments = if (folder.isEmpty()) emptyList() else folder.split('/')
@@ -292,7 +329,7 @@ private fun FolderTree(folders: List<String>, counts: Map<String, Int>, collapse
       items(visible, key = { it }) { folder ->
         val segments = if (folder.isEmpty()) emptyList() else folder.split('/')
         val label = folder.substringAfterLast('/').ifBlank { "Kök" }
-        val children = folders.any { it.startsWith("$folder/") }
+        val children = folder in parents
         Row(Modifier.fillMaxWidth()
             .background(if (selected == folder) MaterialTheme.colorScheme.primaryContainer
                 else Color.Transparent, RoundedCornerShape(12.dp))
@@ -377,9 +414,18 @@ fun EonNoteEditor(modifier: Modifier, note: EonLocalNote?, onBack: () -> Unit,
     var mode by rememberSaveable(note?.id) { mutableStateOf(NoteMode.EDIT.name) }
     var focus by rememberSaveable(note?.id) { mutableStateOf(false) }
     var savedSnapshot by remember(note?.id) { mutableStateOf<Pair<String, String>?>(null) }
+    var wordCount by remember(note?.id) { mutableIntStateOf(-1) }
     val changed = title != (note?.title ?: "") || body.text != (note?.body ?: "")
     val canEdit = loaded && oldDraft == null && !busy
     val canSave = canEdit && changed && (title.isNotBlank() || body.text.isNotBlank())
+
+    val bodyForCount = body.text
+    LaunchedEffect(bodyForCount, focus) {
+        if (!focus) {
+            delay(180)
+            wordCount = withContext(Dispatchers.Default) { countNoteWords(bodyForCount) }
+        }
+    }
 
     LaunchedEffect(note?.id) {
         try {
@@ -554,10 +600,7 @@ fun EonNoteEditor(modifier: Modifier, note: EonLocalNote?, onBack: () -> Unit,
                         inner()
                     } })
                 if (!focus) {
-                    val wordCount = remember(body.text) {
-                        body.text.trim().split(Regex("\\s+")).count { it.isNotBlank() }
-                    }
-                    Text("Markdown · $wordCount kelime · ${body.text.length} karakter",
+                    Text("Markdown · ${if (wordCount < 0) "…" else wordCount} kelime · ${body.text.length} karakter",
                         modifier = Modifier.padding(bottom = 8.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)

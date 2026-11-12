@@ -1,7 +1,7 @@
 import '@fontsource-variable/bricolage-grotesque'
 import { FileDropTargets, type DropDestination } from './FileDropTargets'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, ChevronLeft, ChevronRight, Command, HardDrive, LayoutDashboard, Laptop2, NotebookPen, Plus, Settings2, Smartphone } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Command, HardDrive, LayoutDashboard, Laptop2, NotebookPen, Plus, Settings2, Smartphone, Sparkles } from 'lucide-react'
 import type { IpcChannel } from '../../shared/contracts'
 import { DevicesPane } from './DevicesPane'
 import { PhoneSetupGuide } from './PhoneSetup'
@@ -10,10 +10,11 @@ import { ActionsPane, TransfersPane } from './ControlsPane'
 import { APP_THEME_STORAGE_KEY, isAppTheme, type AppTheme } from '../theme'
 import { EonLogo } from '../components/brand/EonLogo'
 import { DeckMirror } from './DeckMirror'
+import { EonAiHome, EonAiSettings, EonAiWorkspace, useEonAiController } from './EonAi'
 import './eon2.css'
 import './eon-glass.css'
 
-type Section = 'dashboard' | 'notes' | 'devices' | 'automations' | 'transfers' | 'settings'
+type Section = 'dashboard' | 'ai' | 'notes' | 'devices' | 'automations' | 'transfers' | 'settings'
 type Note = WorkspaceNote
 const EonNotesWorkspace = lazy(async () => ({ default: (await import('./EonNotesWorkspace')).EonNotesWorkspace }))
 type SystemSnapshot = {
@@ -28,6 +29,7 @@ type DeviceResult = { devices: Device[]; scannedAt: number; transport: string; s
 
 const menu: { id: Section; label: string; icon: typeof LayoutDashboard; helper?: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'ai', label: 'Eon AI', icon: Sparkles },
   { id: 'notes', label: 'Eon Notes', icon: NotebookPen },
   { id: 'devices', label: 'Cihazlar', icon: Smartphone },
   { id: 'automations', label: 'PC Kısayolları', icon: Command },
@@ -93,6 +95,7 @@ function Preferences({ theme, settings, onChange, error, material, onMaterialCha
 
 export function Eon2App() {
   const [section, setSection] = useState<Section>('dashboard')
+  const ai = useEonAiController()
   const [notesActivated, setNotesActivated] = useState(false)
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null)
   const [deviceResult, setDeviceResult] = useState<DeviceResult | null>(null)
@@ -131,8 +134,15 @@ export function Eon2App() {
     } catch (error) { setSettingsError(friendlyError(error)) }
   }
   useEffect(() => {
-    if (!window.kapanisDesktop) return
+    const bridge = window.kapanisDesktop
+    if (!bridge) return
     let active = true
+    const unsubscribe = bridge.on('eon2:theme:changed', (value: unknown) => {
+      if (typeof value === 'string' && isAppTheme(value)) {
+        setTheme(value)
+        setSettings(current => current ? { ...current, theme: value } : current)
+      }
+    })
     const load = async () => {
       try {
         let next = await desktopInvoke<SharedSettings>('eon2:settings:get')
@@ -148,7 +158,27 @@ export function Eon2App() {
     }
     void load()
     const interval = window.setInterval(() => { if (!document.hidden) void load() }, 3000)
-    return () => { active = false; window.clearInterval(interval) }
+    return () => { active = false; unsubscribe(); window.clearInterval(interval) }
+  }, [])
+
+  useEffect(() => {
+    const bridge = window.kapanisDesktop
+    if (!bridge) return
+    return bridge.on('eon2:ai:navigate', (payload: unknown) => {
+      const sectionName = typeof payload === 'string' ? payload
+        : payload && typeof payload === 'object' && 'section' in payload ? payload.section : null
+      if (typeof sectionName !== 'string') return
+      const normalized = sectionName.toLowerCase().trim()
+      const aliases: Record<string, Section> = {
+        home: 'dashboard', deck: 'dashboard', dashboard: 'dashboard',
+        ai: 'ai', notes: 'notes', note: 'notes',
+        devices: 'devices', device: 'devices',
+        actions: 'automations', shortcuts: 'automations', automations: 'automations',
+        files: 'transfers', transfers: 'transfers', settings: 'settings',
+      }
+      const destination = aliases[normalized]
+      if (destination) setSection(destination)
+    })
   }, [])
 
   const [showPhoneGuide, setShowPhoneGuide] = useState(() => !localStorage.getItem('eon2:phone-guide-seen'))
@@ -198,7 +228,7 @@ export function Eon2App() {
       catch { if (alive) setSnapshot(null) }
     }
     void update()
-    const id = window.setInterval(() => { if (!document.hidden && section === 'dashboard') void update() }, 2000)
+    const id = window.setInterval(() => { if (!document.hidden && (section === 'dashboard' || section === 'ai')) void update() }, 2000)
     return () => { alive = false; window.clearInterval(id) }
   }, [section])
   useEffect(() => {
@@ -234,7 +264,8 @@ export function Eon2App() {
       </button>
     </header>
       <main className={`eon2-content ${section === 'dashboard' ? 'eon2-content--board' : ''}`} id="main-content">
-        {section === 'dashboard' && <DeckMirror snapshot={snapshot} devices={devices} now={now} navigate={setSection}/>}
+        {section === 'dashboard' && <><DeckMirror snapshot={snapshot} devices={devices} now={now} navigate={setSection}/><EonAiHome ai={ai} onOpen={() => setSection('ai')}/></>}
+        {section === 'ai' && <EonAiWorkspace ai={ai} snapshot={snapshot} now={now}/>}
 
         {section === 'notes' && notesError && <div className="eon2-error" role="alert">{notesError}</div>}
         {notesActivated && <Suspense fallback={section === 'notes' ? <div className="eon2-empty" role="status">Notlar açılıyor...</div> : null}>
@@ -249,5 +280,6 @@ export function Eon2App() {
     <FileDropTargets onDrop={onFileDrop} onError={setDropError}/>
     {dropError && <div className="eon2-drop-error eon2-error" role="alert">{dropError}<button className="eon2-button eon2-button--quiet" onClick={() => setDropError(null)}>Kapat</button></div>}
     {showPhoneGuide && <PhoneSetupGuide onClose={closePhoneGuide} onDevices={() => { closePhoneGuide(); setSection('devices') }}/>}
+    {ai.settingsOpen && <EonAiSettings ai={ai}/>}
   </div>
 }

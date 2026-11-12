@@ -12,9 +12,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,12 +40,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.animation.core.animateFloatAsState
@@ -74,28 +70,20 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.semantics.Role
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import android.content.res.Configuration
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.json.JSONObject
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -115,15 +103,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class EonTab(val label: String, val icon: ImageVector) {
-    Dashboard("Panel", Icons.Rounded.Dashboard),
     Controls("Kontrol", Icons.Rounded.Bolt),
+    Ai("Asistan", Icons.Rounded.AutoAwesome),
+    LocalSend("Local Send", Icons.Rounded.SwapHoriz),
     Notes("Notlar", Icons.Rounded.NoteAlt),
     Settings("Ayarlar", Icons.Rounded.Settings),
 }
 
-private enum class ControlPage { Overview, Actions, Files }
+private enum class ControlPage { Overview, Actions }
 
 private val Green = Color(0xFF7BD2A4)
+
+/** Avoid re-rendering the portrait UI for fresh JSONObject instances with unchanged connection data. */
+private fun EonPeerStatus.samePresentationAs(other: EonPeerStatus, includeSystem: Boolean): Boolean =
+    connected == other.connected && paired == other.paired && name == other.name &&
+        transport == other.transport &&
+        (!includeSystem || system?.toString() == other.system?.toString())
 
 private fun Context.eonActivity(): Activity? {
     var current: Context = this
@@ -137,11 +132,13 @@ private fun Context.eonActivity(): Activity? {
 fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
     val context = LocalContext.current
     val activity = remember(context) { context.eonActivity() }
+    val landscape by rememberUpdatedState(LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
     val store = remember { EonNotesRepository.shared(context.applicationContext) }
     val client = remember { EonUsbClient(context.applicationContext, store) }
+    val aiChatState = remember { EonAiChatState() }
     val downloads = remember(client) { IncomingDownloads(context.applicationContext, client) }
     val scope = rememberCoroutineScope()
-    var tab by rememberSaveable { mutableStateOf(EonTab.Dashboard) }
+    var tab by rememberSaveable { mutableStateOf(EonTab.Controls) }
     var controlPage by remember { mutableStateOf(ControlPage.Overview) }
     var peer by remember { mutableStateOf(EonPeerStatus(false, "Bilgisayar aranıyor", false)) }
     var notes by remember { mutableStateOf<List<EonLocalNote>>(emptyList()) }
@@ -227,8 +224,11 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         reloadNotes()
         while (isActive) {
             if (foreground) {
-                peer = withContext(Dispatchers.IO) { client.detect() }
-                if (peer.connected && peer.paired && !syncing) doSync()
+                val detected = withContext(Dispatchers.IO) { client.detect() }
+                if (!peer.samePresentationAs(detected, includeSystem = landscape)) {
+                    peer = detected
+                }
+                if (detected.connected && detected.paired && !syncing) doSync()
             }
             delay(if (foreground) 5000 else 12000)
         }
@@ -319,18 +319,12 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         )
     }
 
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     BackHandler(enabled = !landscape && (selected != null || createNew ||
         (tab == EonTab.Controls && controlPage != ControlPage.Overview))) {
         if (tab == EonTab.Controls && controlPage != ControlPage.Overview) controlPage = ControlPage.Overview
         else { selected = null; selectedConflict = null; createNew = false }
     }
-    val background = MaterialTheme.colorScheme.background
     val pageStates = rememberSaveableStateHolder()
-    val screenBackdrop = rememberLayerBackdrop {
-        drawRect(background)
-        drawContent()
-    }
     if (landscape) {
         LandscapeDeck(
             client = client,
@@ -354,11 +348,8 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         topBar = {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-                        Image(painterResource(R.drawable.eon_launcher_foreground), "Eon logosu", modifier = Modifier.fillMaxSize())
-                    }
-                    Text("eon", fontWeight = FontWeight.SemiBold, fontSize = 25.sp, letterSpacing = (-.8).sp)
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.eon_launcher_foreground), "Eon logosu", modifier = Modifier.fillMaxSize())
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { requestOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) },
@@ -373,9 +364,6 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                             Text(if (peer.connected && peer.paired) "Bağlı" else "Yerel", fontSize = 11.sp)
                         }
                     }
-                    IconButton(onClick = { tab = EonTab.Settings }, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.Settings, "Ayarlar", modifier = Modifier.size(19.dp))
-                    }
                 }
             }
         },
@@ -384,18 +372,13 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         val navigationVisible = tab != EonTab.Notes || (selected == null && !createNew)
         val contentModifier = Modifier.fillMaxSize().padding(padding)
         val insetContentModifier = contentModifier.padding(bottom = if (navigationVisible) 104.dp else 0.dp)
-        Crossfade(
-            modifier = Modifier.layerBackdrop(screenBackdrop),
-            targetState = tab to (if (tab == EonTab.Controls) controlPage else ControlPage.Overview),
-            animationSpec = tween(durationMillis = 160),
-            label = "Eon sayfa geçişi",
-        ) { (visibleTab, visibleControlPage) ->
-        pageStates.SaveableStateProvider(visibleTab to visibleControlPage) {
-        when (visibleTab) {
-            EonTab.Dashboard -> DashboardContent(contentModifier, peer, notes, onConnect = { tab=EonTab.Controls }, onNotes={tab=EonTab.Notes}, onDeck={requestOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)})
-            EonTab.Controls -> when (visibleControlPage) {
+        pageStates.SaveableStateProvider(tab) {
+        when (tab) {
+            EonTab.Ai -> EonAiScreen(client, peer.connected && peer.paired, aiChatState, scope,
+                insetContentModifier, onConnect = { tab = EonTab.Controls })
+            EonTab.LocalSend -> PcControlsScreen(client, true, insetContentModifier, onBack = { tab = EonTab.Controls })
+            EonTab.Controls -> when (controlPage) {
                 ControlPage.Actions -> PcControlsScreen(client, false, insetContentModifier, onBack = { controlPage = ControlPage.Overview })
-                ControlPage.Files -> PcControlsScreen(client, true, insetContentModifier, onBack = { controlPage = ControlPage.Overview })
                 ControlPage.Overview -> ControlsContent(insetContentModifier, client, peer, message, answering || outgoingToken != null,
                     onPair = {
                         scope.launch {
@@ -412,8 +395,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                             finally { answering = false }
                         }
                     },
-                    onOpenPcActions = { controlPage = ControlPage.Actions },
-                    onOpenFiles = { controlPage = ControlPage.Files })
+                    onOpenPcActions = { controlPage = ControlPage.Actions })
             }
             EonTab.Notes -> if (selected?.conflict == true && selectedConflict == null) {
                 Column(contentModifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -479,11 +461,10 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
             }
         }
         }
-        }
     }
     Box(Modifier.align(Alignment.BottomCenter)) {
             if (tab != EonTab.Notes || (selected == null && !createNew)) {
-                FloatingEonNavigation(tab, screenBackdrop) { destination ->
+                FloatingEonNavigation(tab) { destination ->
                     tab = destination
                     controlPage = ControlPage.Overview
                     selected = null
@@ -501,14 +482,14 @@ internal fun EonCard(modifier:Modifier=Modifier, content:@Composable ()->Unit) {
 }
 
 @Composable
-private fun FloatingEonNavigation(selected: EonTab, backdrop: Backdrop, onSelect: (EonTab) -> Unit) {
+private fun FloatingEonNavigation(selected: EonTab, onSelect: (EonTab) -> Unit) {
     Box(
         Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
             modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth()
-                .eonGlass(RoundedCornerShape(32.dp), backdrop, prominent = true),
+                .eonGlass(RoundedCornerShape(32.dp), prominent = true),
             shape = RoundedCornerShape(32.dp),
             color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -544,174 +525,6 @@ private fun FloatingEonNavigation(selected: EonTab, backdrop: Backdrop, onSelect
                     }
                 }
             }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DashboardContent(modifier: Modifier, peer: EonPeerStatus, notes: List<EonLocalNote>, onConnect: () -> Unit, onNotes: () -> Unit, onDeck: () -> Unit) {
-    val connected = peer.connected && peer.paired
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val cpu = peer.system?.optJSONObject("cpu")?.optDouble("usagePercent", Double.NaN)
-        ?.takeIf { it.isFinite() && it in 0.0..100.0 }?.toInt()
-    val memory = peer.system?.optJSONObject("memory")?.optDouble("usagePercent", Double.NaN)
-        ?.takeIf { it.isFinite() && it in 0.0..100.0 }?.toInt()
-
-    Column(
-        modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).padding(bottom = 110.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("Çalışma alanın", style = MaterialTheme.typography.headlineLarge)
-            Text("Bilgisayarın ve notların. Hepsi bir arada.",
-                style = MaterialTheme.typography.bodyMedium, color = onSurfaceVariant)
-        }
-
-        Box(
-            Modifier.fillMaxWidth().eonGlass(RoundedCornerShape(28.dp), prominent = true)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = .035f)),
-        ) {
-            Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-                        Image(painterResource(R.drawable.eon_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize())
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Eon Desktop", fontWeight = FontWeight.Medium,
-                            fontSize = 13.sp, color = onSurfaceVariant)
-                        Text(if (connected) "Cihazın hazır" else if (peer.connected) "Eşleştirme gerekli" else "Bağlantı bekleniyor",
-                            fontSize = 12.sp, color = onSurfaceVariant)
-                    }
-                    Box(Modifier.clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = 11.dp, vertical = 7.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(Modifier.size(6.dp).clip(CircleShape)
-                                .background(if (connected) Color(0xFF91EFBA) else Color(0xFFFFC18A)))
-                            Text(if (connected) "Bağlı" else "Bekliyor", color = MaterialTheme.colorScheme.onSurface, fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                Text(if (connected) "Bilgisayarınla aynı akışta."
-                    else "Masaüstünle bağlantı kur.", color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold)
-                Text(if (peer.connected) peer.name
-                    else "USB kablosuyla bağlan veya eşleştirilmiş Tailscale bağlantını kullan.",
-                    fontSize = 12.sp, lineHeight = 18.sp, color = onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Button(onClick = onDeck, shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("Deck’i aç", fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.width(9.dp))
-                    Icon(Icons.Rounded.ViewQuilt, null, modifier = Modifier.size(18.dp))
-                }
-                TextButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (connected) "Kontrol merkezine git" else "Bağlantıyı yönet")
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, Modifier.size(18.dp))
-                }
-            }
-        }
-
-        if (connected) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                DashboardMetric("İşlemci", cpu, Icons.Rounded.Memory, Modifier.weight(1f))
-                DashboardMetric("Bellek", memory, Icons.Rounded.Storage, Modifier.weight(1f))
-            }
-        } else {
-            EonCard(Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Rounded.Devices, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Cihazların arasında geçiş yap", fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodyMedium)
-                        Text("Bilgisayarına bağlanarak kontrol araçlarına eriş.",
-                            style = MaterialTheme.typography.bodySmall, color = onSurfaceVariant)
-                    }
-                }
-            }
-        }
-
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Son notlar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Kaldığın yerden devam et", style = MaterialTheme.typography.bodySmall,
-                    color = onSurfaceVariant)
-            }
-            TextButton(onClick = onNotes) {
-                Text("Tüm notlar")
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, modifier = Modifier.size(17.dp))
-            }
-        }
-
-        if (notes.isEmpty()) {
-            EonCard(Modifier.fillMaxWidth().clickable(onClickLabel = "Not oluşturmaya başla", onClick = onNotes)) {
-                Row(Modifier.fillMaxWidth().padding(19.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(Modifier.size(47.dp).clip(RoundedCornerShape(15.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.EditNote, null, tint = MaterialTheme.colorScheme.primary)
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("İlk notunu oluştur", fontWeight = FontWeight.SemiBold)
-                        Text("Fikirlerini kaydet, cihazların arasında eşitle.",
-                            style = MaterialTheme.typography.bodySmall, color = onSurfaceVariant)
-                    }
-                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = onSurfaceVariant)
-                }
-            }
-        } else {
-            notes.take(3).forEach { note ->
-                EonCard(Modifier.fillMaxWidth().clickable(onClickLabel = "${note.title} notunu aç", onClick = onNotes)) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                            Icon(if (note.conflict) Icons.Rounded.ErrorOutline else Icons.Rounded.Description,
-                                contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(21.dp))
-                        }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(note.title, style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (note.conflict) "Çakışan sürümler gözden geçirilmeli"
-                                else note.body.replace('\n', ' ').ifBlank { "Boş not" },
-                                style = MaterialTheme.typography.bodySmall, color = onSurfaceVariant,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null,
-                            tint = onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(2.dp))
-    }
-}
-
-@Composable
-private fun DashboardMetric(label: String, percent: Int?, icon: ImageVector, modifier: Modifier = Modifier) {
-    EonCard(modifier) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(7.dp))
-                Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(percent?.let { "$it%" } ?: "—", style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold)
-            Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(9.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)) {
-                Box(Modifier.fillMaxWidth((percent ?: 0) / 100f).height(5.dp)
-                    .clip(RoundedCornerShape(9.dp)).background(MaterialTheme.colorScheme.primary))
             }
         }
     }

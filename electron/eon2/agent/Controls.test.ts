@@ -47,7 +47,9 @@ test('stored choices survive reopening and phone-created shortcuts are enabled',
     await assert.rejects(store.execute('lock', true), /onaylanmamış/)
     await store.execute('cancel', true)
 
-    const fromPhone = store.save({ id: 'cancel', name: 'Telefon düzenlemesi', kind: 'cancel', target: '', arguments: [], delaySeconds: 0, remoteEnabled: true }, true)
+    const lockedEdit = store.save({ ...store.list()[0], name: 'Kilit düzenlemesi', remoteEnabled: true }, true)
+    assert.equal(lockedEdit.remoteEnabled, false)
+    const fromPhone = store.save({ id: 'cancel', name: 'Telefon düzenlemesi', kind: 'cancel', target: '', arguments: [], delaySeconds: 0 }, true)
     assert.equal(fromPhone.remoteEnabled, true)
     const createdFromPhone = store.save({ name: 'Telefondan yeni', kind: 'command', target: 'Write-Output new', arguments: [], delaySeconds: 0 }, true)
     assert.equal(createdFromPhone.remoteEnabled, true)

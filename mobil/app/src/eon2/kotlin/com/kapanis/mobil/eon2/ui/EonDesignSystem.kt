@@ -1,8 +1,5 @@
 package com.kapanis.mobil.eon2.ui
 
-import android.app.ActivityManager
-import android.content.Context
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -17,7 +14,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
@@ -26,19 +22,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawPlainBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.backdrops.layerBackdrop
-
-private val LocalGlassBackdrop = staticCompositionLocalOf<Backdrop?> { null }
-private val LocalGlassEffects = staticCompositionLocalOf { false }
 
 /** All five themes share the same semantic roles, including Material container colors. */
 @Composable
@@ -96,50 +82,36 @@ internal fun EonTheme(theme: String, content: @Composable () -> Unit) {
     ), content = content)
 }
 
-/** A single static source: panels never sample each other or allocate their own timers. */
+/** Static wash: a single cached draw instead of sampling the whole screen for each tile. */
 @Composable
 internal fun EonGlassBackdrop(content: @Composable () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val backdrop = rememberLayerBackdrop()
-    val context = LocalContext.current.applicationContext
-    val effects = remember(context) {
-        Build.VERSION.SDK_INT >= 31 && !(context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).isLowRamDevice
-    }
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).drawWithCache {
+        Box(Modifier.fillMaxSize().drawWithCache {
             val wash = Brush.linearGradient(listOf(scheme.background,
                 lerp(scheme.background, scheme.primary, .09f), scheme.background))
             val light = Brush.radialGradient(listOf(scheme.primary.copy(alpha = .10f), Color.Transparent),
                 center = Offset(size.width * .9f, size.height * .12f), radius = size.maxDimension * .6f)
             onDrawBehind { drawRect(wash); drawRect(light) }
         })
-        CompositionLocalProvider(LocalGlassBackdrop provides backdrop, LocalGlassEffects provides effects,
-            LocalContentColor provides scheme.onBackground, content = content)
+        CompositionLocalProvider(LocalContentColor provides scheme.onBackground, content = content)
     }
 }
 
-/** Optical edge + tinted surface. Android 8–11/low RAM retains contrast without GPU effects. */
+/** Retain the optical edge and tint without expensive offscreen blur/lens passes. */
 @Composable
 internal fun Modifier.eonGlass(
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
-    backdrop: Backdrop? = LocalGlassBackdrop.current,
     prominent: Boolean = false,
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < .5f
-    val effects = LocalGlassEffects.current
-    val tint = scheme.surface.copy(alpha = if (prominent) .78f else .72f)
     val rim = remember(scheme, dark) { Brush.linearGradient(listOf(
         scheme.onSurface.copy(alpha = if (dark) .24f else .16f),
         scheme.primary.copy(alpha = .05f), scheme.onSurface.copy(alpha = .12f))) }
     val sheen = remember(scheme, dark) { Brush.linearGradient(listOf(
         Color.White.copy(alpha = if (dark) .045f else .45f), Color.Transparent,
         scheme.primary.copy(alpha = .035f))) }
-    val material = if (effects && backdrop != null) Modifier.drawPlainBackdrop(
-        backdrop = backdrop, shape = { shape }, effects = {
-            blur(if (prominent) 10.dp.toPx() else 5.dp.toPx())
-            if (Build.VERSION.SDK_INT >= 33) lens(10.dp.toPx(), 14.dp.toPx())
-        }, onDrawSurface = { drawRect(tint) },
-    ) else Modifier.background(scheme.surface.copy(alpha = .96f), shape)
-    return this.then(material).clip(shape).background(sheen).border(.75.dp, rim, shape)
+    return this.background(scheme.surface.copy(alpha = if (prominent) .98f else .96f), shape)
+        .clip(shape).background(sheen).border(.75.dp, rim, shape)
 }

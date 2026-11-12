@@ -12,6 +12,7 @@ export const EON_TAILNET_PORT = 8769
 // Limit by encoded bytes, then page deltas below this cap; binary attachments
 // will use separate chunk endpoints when that release gate is implemented.
 const MAX_REQUEST_BYTES = 32 * 1024 * 1024
+const MAX_AI_REQUEST_BYTES = 64 * 1024
 const MAX_CLOCK_SKEW_MS = 30_000
 const NONCE_RETENTION_MS = 90_000
 export type RemotePermission = PairedDevice['permissions'][number]
@@ -191,7 +192,7 @@ export class UsbPairingServer {
       return
     }
     let body: Buffer
-    try { body = await this.readBody(request, pathname === '/v1/deck/layout' ? MAX_DECK_LAYOUT_BYTES : MAX_REQUEST_BYTES) }
+    try { body = await this.readBody(request, pathname === '/v1/deck/layout' ? MAX_DECK_LAYOUT_BYTES : pathname.startsWith('/v1/ai/') ? MAX_AI_REQUEST_BYTES : MAX_REQUEST_BYTES) }
     catch (error) {
       this.json(response, error instanceof RequestTooLargeError ? 413 : 400, {
         error: error instanceof RequestTooLargeError ? 'request-too-large' : 'invalid-request-body',
@@ -218,15 +219,15 @@ export class UsbPairingServer {
     }
 
     const permission: RemotePermission | null = pathname === '/v1/deck/layout' ? (method === 'POST' ? 'actions.execute' : 'system.read')
-      : ['/v1/system', '/v1/settings', '/v1/deck'].includes(pathname) ? 'system.read'
+      : ['/v1/system', '/v1/settings', '/v1/deck', '/v1/ai/state', '/v1/ai/models'].includes(pathname) ? 'system.read'
       : pathname === '/v1/notes/list' || pathname === '/v1/notes/manifest' || pathname === '/v1/notes/delta' ? 'notes.read'
         : pathname === '/v1/notes/apply' ? 'notes.write'
           : ['/v1/files/list', '/v1/files/prepare', '/v1/files/chunk', '/v1/files/finish', '/v1/files/cancel'].includes(pathname) ? 'files.transfer'
-            : ['/v1/actions/list', '/v1/actions/save', '/v1/actions/execute', '/v1/deck/execute'].includes(pathname) ? 'actions.execute'
+            : ['/v1/actions/list', '/v1/actions/save', '/v1/actions/execute', '/v1/deck/execute', '/v1/ai/send', '/v1/ai/pending', '/v1/ai/approve', '/v1/ai/reject'].includes(pathname) ? 'actions.execute'
               : pathname === '/v1/power/execute' ? 'power.manage' : null
     if (!permission) { this.json(response, 404, { error: 'not-found' }); return }
     const validMethod = pathname === '/v1/settings' || pathname === '/v1/deck/layout' ? method === 'GET' || method === 'POST'
-      : ['/v1/notes/apply', '/v1/notes/delta', '/v1/files/prepare', '/v1/files/chunk', '/v1/files/finish', '/v1/files/cancel', '/v1/actions/save', '/v1/actions/execute', '/v1/power/execute', '/v1/deck/execute'].includes(pathname) ? method === 'POST' : method === 'GET'
+      : ['/v1/notes/apply', '/v1/notes/delta', '/v1/files/prepare', '/v1/files/chunk', '/v1/files/finish', '/v1/files/cancel', '/v1/actions/save', '/v1/actions/execute', '/v1/power/execute', '/v1/deck/execute', '/v1/ai/send', '/v1/ai/approve', '/v1/ai/reject'].includes(pathname) ? method === 'POST' : method === 'GET'
     if (!validMethod) { this.json(response, 405, { error: 'method-not-allowed' }); return }
     if (!this.authorize(request, method, pathname, body, permission)) { this.json(response, 401, { error: 'unauthorized' }); return }
 
@@ -236,7 +237,7 @@ export class UsbPairingServer {
         if (!operation) this.json(response, 503, { error: 'capability-not-ready' })
         else this.json(response, 200, await operation(method === 'POST' ? JSON.parse(body.toString('utf8')) : undefined))
       }
-      else if ((pathname === '/v1/deck' || pathname === '/v1/deck/execute' || pathname.startsWith('/v1/files/') || pathname.startsWith('/v1/actions/') || pathname.startsWith('/v1/power/')) && this.handlers.controls) {
+      else if ((pathname === '/v1/deck' || pathname === '/v1/deck/execute' || pathname.startsWith('/v1/files/') || pathname.startsWith('/v1/actions/') || pathname.startsWith('/v1/power/') || pathname.startsWith('/v1/ai/')) && this.handlers.controls) {
         this.json(response, 200, await this.handlers.controls(pathname, body.length ? JSON.parse(body.toString('utf8')) : {}, String(request.headers['x-eon-device'])))
       }
       else if (pathname === '/v1/settings' && this.handlers.settings) this.json(response, 200, await this.handlers.settings(method === 'POST' ? JSON.parse(body.toString('utf8')) : undefined, Boolean(usbSerial)))

@@ -1,12 +1,13 @@
 import { customActionIcon } from './controls/actionIcons'
-import type { ActionIconId } from '../../shared/eon-controls'
+import { isTimedPowerAction, type ActionIconId } from '../../shared/eon-controls'
+import { usePowerCountdown } from './controls/usePowerCountdown'
 import { MediaPlayer } from './MediaPlayer'
 import type { DeckMediaSample } from '../../shared/eon-deck-telemetry'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import {
-  Grip, Activity, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Command,
-  HardDrive, LayoutTemplate, LockKeyhole, Monitor,
-  Plus, RotateCcw, Save, Settings2, X,
+  Grip, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Command,
+  ChartNoAxesColumn, ExternalLink, Folder, LayoutTemplate, LockKeyhole, Monitor,
+  Plus, Power, RotateCcw, Save, Settings2, Square, Terminal, TimerOff, X,
 } from 'lucide-react'
 import type { IpcChannel } from '../../shared/contracts'
 import {
@@ -21,7 +22,8 @@ type SystemSnapshot = {
   hostname: string; cpu: { usagePercent: number | null; logicalCores: number };
   memory: { usagePercent: number }; disk?: { usagePercent: number };
 }
-type DeckKey = { id: string; name: string; kind: string; icon?: ActionIconId; available: boolean; remoteEnabled?: boolean }
+type DeckKey = { id: string; name: string; kind: string; icon?: ActionIconId; available: boolean; remoteEnabled?: boolean;
+  tool?: boolean; delaySeconds?: number; activeUntil?: number }
 type DeckData = {
   tools: Array<{ id: string; name: string; icon: string }>
   actions: DeckKey[]
@@ -40,8 +42,12 @@ const uiNames: Record<DeckTileId, string> = {
   clock: 'Saat', cpu: 'CPU', gpu: 'GPU', ram: 'RAM', disk: 'Disk', media: 'Medya', shortcuts: 'Hızlı erişim',
 }
 const toolIcons: Record<string, typeof Command> = {
-  folder: HardDrive, file: HardDrive, terminal: Command, command: Command, chart: Activity,
-  settings: Settings2, application: Monitor, lock: LockKeyhole, shutdown: Monitor, restart: RotateCcw,
+  folder: Folder, file: Folder, terminal: Terminal, command: Terminal, chart: ChartNoAxesColumn,
+  settings: Settings2, application: ExternalLink, lock: LockKeyhole, shutdown: Power, restart: RotateCcw, cancel: TimerOff,
+}
+const keyTones: Record<string, string> = {
+  folder: 'amber', file: 'amber', terminal: 'violet', command: 'violet', chart: 'mint', settings: 'muted',
+  lock: 'coral', shutdown: 'coral', restart: 'coral', cancel: 'coral',
 }
 
 async function desktopInvoke<T>(channel: IpcChannel, data?: unknown): Promise<T> {
@@ -73,6 +79,24 @@ function CircleGauge({ label, percent, tone, detail }: { label: string; percent:
     {detail && <small>{detail}</small>}
   </div>
 }
+function MirrorShortcut({ item, busy, hideName, onClick, quickIndex, phoneTile = false }: {
+  item: DeckKey; busy: boolean; hideName: boolean; onClick: () => void; quickIndex?: number; phoneTile?: boolean
+}) {
+  const locked = phoneTile && (!item.available || item.remoteEnabled === false)
+  const countdown = usePowerCountdown(locked ? undefined : item.activeUntil)
+  const Icon = countdown ? Square : customActionIcon(item.icon) ?? toolIcons[item.kind] ?? Command
+  const label = countdown ? `${item.name} · Durdur` : item.name
+  const tone = locked ? 'muted' : countdown ? 'mint' : keyTones[item.kind] ?? 'blue'
+  return <button type="button" disabled={busy || (!phoneTile && !item.available)} data-quick-index={quickIndex}
+    className={countdown ? 'eon-mirror-shortcut-active' : undefined} data-tone={phoneTile ? tone : undefined}
+    data-locked={locked || undefined} data-icon-only={hideName && !countdown || undefined}
+    title={label} aria-label={locked ? `${label} · İzin gerekli` : label} onClick={onClick}>
+    <Icon className="eon-mirror-key-icon" aria-hidden="true" size={22}/>
+    {countdown ? <span role="timer">{countdown}</span> : !hideName && <span>{item.name}</span>}
+    {locked && <LockKeyhole className="eon-mirror-key-lock" aria-hidden="true"/>}
+  </button>
+}
+
 function MirrorContent({ id, snapshot, data, now, mediaCommand, command, busy, paired, quickIds, hideShortcutNames }: {
   id: DeckTileId; snapshot: SystemSnapshot | null; data: DeckData | null; now: Date;
   mediaCommand: (id: string) => void; command: (key: DeckKey & { tool?: boolean }) => void; busy: boolean; paired: boolean;
@@ -93,13 +117,8 @@ function MirrorContent({ id, snapshot, data, now, mediaCommand, command, busy, p
     .map(identity => keys.find(item => `${item.tool ? 'tool' : 'action'}:${item.id}` === identity))
     .filter((item): item is DeckKey & { tool?: boolean } => Boolean(item))
   return <div className="eon-mirror-shortcuts">
-    {selected.map(key => {
-      const Icon = customActionIcon(key.icon) ?? toolIcons[key.kind] ?? Command
-      return <button type="button" key={`${key.tool ? 'tool' : 'action'}:${key.id}`} disabled={busy || !key.available}
-        data-quick-index={selected.indexOf(key)} title={key.name} aria-label={key.name} onClick={() => command(key)}>
-        <Icon aria-hidden="true" size={22}/>{!hideShortcutNames && <span>{key.name}</span>}
-      </button>
-    })}
+    {selected.map((key, index) => <MirrorShortcut key={`${key.tool ? 'tool' : 'action'}:${key.id}`}
+      item={key} busy={busy} quickIndex={index} hideName={hideShortcutNames} onClick={() => command(key)}/>)}
     {selected.length === 0 && <div className="eon-mirror-no-keys"><Command size={20}/><small>{quickIds?.length === 0 ? 'Hızlı kısayol seçilmedi' : paired ? 'Kısayollar yükleniyor' : 'PC bağlantısı bekleniyor'}</small></div>}
   </div>
 }
@@ -107,6 +126,7 @@ function MirrorContent({ id, snapshot, data, now, mediaCommand, command, busy, p
 export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
   const [serverLayout, setServerLayout] = useState<DeckLayout>(defaultDeckLayout)
   const [selectedPage, setSelectedPage] = useState('panel')
+  const [denseKeys, setDenseKeys] = useState(false)
   const [naming, setNaming] = useState<'add' | 'copy' | 'rename' | null>(null)
   const [pageName, setPageName] = useState('')
   const [draft, setDraft] = useState<DeckTile[] | null>(null)
@@ -133,6 +153,7 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
   const editorBase = useRef<{ widgets: DeckTile[]; quickIds: string[] | null; hideShortcutNames: boolean } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDetailsElement>(null)
+  const deckRequest = useRef(0)
 
   useEffect(() => {
     if (!contextMenu) return
@@ -185,25 +206,38 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
     const id = window.setInterval(() => { if (!document.hidden) void refresh() }, 2800)
     return () => { active = false; window.clearInterval(id) }
   }, [acceptLayout])
-  useEffect(() => {
-    let active = true
-    const refresh = async () => {
-      try { const data = await desktopInvoke<DeckData>('eon2:deck:get'); if (active) setDeck(data) }
-      catch { if (active) setDeck(null) }
+  const refreshDeck = useCallback(async () => {
+    const request = ++deckRequest.current
+    try {
+      const data = await desktopInvoke<DeckData>('eon2:deck:get')
+      if (request === deckRequest.current) setDeck(data)
+    } catch {
+      if (request === deckRequest.current) setDeck(null)
     }
-    void refresh()
-    const id = window.setInterval(() => { if (!document.hidden) void refresh() }, 3500)
-    return () => { active = false; window.clearInterval(id) }
   }, [])
+  useEffect(() => {
+    void refreshDeck()
+    const id = window.setInterval(() => { if (!document.hidden) void refreshDeck() }, 3500)
+    return () => { ++deckRequest.current; window.clearInterval(id) }
+  }, [refreshDeck])
   const connected = devices.filter(device => device.usb && device.state === 'device').length
   const pages = serverLayout.pages ?? []
   const currentPage = pages.find(page => page.id === selectedPage)
   const pageWidgets = currentPage?.widgets ?? serverLayout.widgets
   const pageQuickIds = currentPage ? currentPage.quickIds : serverLayout.quickIds ?? null
-  const isKeys = selectedPage === 'keys'
+  const isKeys = selectedPage.startsWith('keys:')
+  const allKeys: DeckKey[] = [
+    ...(deck?.tools ?? []).map(tool => ({ id: tool.id, name: tool.name, kind: tool.icon, available: true, tool: true })),
+    ...(deck?.actions ?? []),
+  ]
+  const keysPerPage = denseKeys ? 15 : 12
+  const keyPageCount = Math.max(1, Math.ceil(allKeys.length / keysPerPage))
+  const keyPage = isKeys ? Math.min(Number(selectedPage.slice(5)), keyPageCount - 1) : 0
+  const pageKeys = allKeys.slice(keyPage * keysPerPage, (keyPage + 1) * keysPerPage)
   useEffect(() => {
-    if (!['panel', 'keys'].includes(selectedPage) && !pages.some(page => page.id === selectedPage) && !editMode) setSelectedPage('panel')
-  }, [pages, selectedPage, editMode])
+    if (isKeys && deck && selectedPage !== `keys:${keyPage}`) setSelectedPage(`keys:${keyPage}`)
+    else if (!isKeys && selectedPage !== 'panel' && !pages.some(page => page.id === selectedPage) && !editMode) setSelectedPage('panel')
+  }, [deck, pages, selectedPage, editMode, isKeys, keyPage])
   const activeTiles = draft ?? pageWidgets
   const activeQuickIds = draft ? draftQuickIds : pageQuickIds
   const hideShortcutNames = draft ? draftHideShortcutNames : serverLayout.hideShortcutNames ?? false
@@ -293,7 +327,7 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
     finally { setSaving(false) }
   }
   const addPage = (duplicate = false) => {
-    setPageName(duplicate ? `${currentPage?.name ?? 'Panel'} kopyası` : `Ekran ${pages.length + 1}`)
+    setPageName(duplicate ? `${currentPage?.name ?? 'Deck'} kopyası` : `Ekran ${pages.length + 1}`)
     setNaming(duplicate ? 'copy' : 'add')
   }
   const submitName = () => {
@@ -377,13 +411,18 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
   const run = async (channel: IpcChannel, payload: unknown, title: string) => {
     if (busy) return
     setBusy(true)
-    try { await desktopInvoke(channel, payload); setMessage(`${title} · Komut gönderildi`) }
+    try {
+      await desktopInvoke(channel, payload)
+      if (channel === 'eon2:actions:execute') await refreshDeck()
+      setMessage(`${title} · Komut gönderildi`)
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Komut çalıştırılamadı.') }
     finally { setBusy(false) }
   }
-  const runKey = (key: Pick<DeckKey, 'id' | 'name' | 'kind' | 'available'> & { tool?: boolean }) => {
+  const runKey = (key: DeckKey) => {
     if (!key.available || busy) return
-    if (['lock', 'shutdown', 'restart', 'cancel', 'command'].includes(key.kind) &&
+    if (!isTimedPowerAction(key.kind, key.delaySeconds) && !(key.activeUntil && key.activeUntil > Date.now()) &&
+      ['lock', 'shutdown', 'restart', 'cancel', 'command'].includes(key.kind) &&
       !window.confirm(`“${key.name}” bilgisayarında çalıştırılsın mı?`)) return
     void run(key.tool ? 'eon2:deck:execute' : 'eon2:actions:execute', { id: key.id }, key.name)
   }
@@ -400,10 +439,10 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
       </div>
     </div>}
     <div className="eon-mirror-pages" aria-label="Deck ekranları">
-      <select aria-label="Kontrol edilecek ekran" value={selectedPage} disabled={editMode || saving || naming !== null} onChange={event => setSelectedPage(event.target.value)}>
-        <option value="panel">Panel</option>
+      <select aria-label="Kontrol edilecek ekran" value={isKeys ? `keys:${keyPage}` : selectedPage} disabled={editMode || saving || naming !== null} onChange={event => setSelectedPage(event.target.value)}>
+        <option value="panel">Deck</option>
         {pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
-        <option value="keys">Tuşlar · tüm komutlar</option>
+        {Array.from({ length: keyPageCount }, (_, index) => <option key={index} value={`keys:${index}`}>Tuşlar {index + 1}</option>)}
       </select>
       <button type="button" disabled={!layoutReady || editMode || saving || isKeys || naming !== null} onClick={openEditor}><Grip size={16}/> Düzeni düzenle</button>
       <button type="button" disabled={!layoutReady || editMode || saving || naming !== null} onClick={() => addPage()}><Plus size={16}/> Ekran ekle</button>
@@ -425,19 +464,6 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
       <button type="submit" disabled={!pageName.trim() || saving}>Kaydet</button>
       <button type="button" onClick={() => setNaming(null)}>Vazgeç</button>
     </form>}
-    {isKeys && <div className="eon-mirror-all-keys" aria-label="Tüm tuşlar">{[
-      ...(deck?.tools ?? []).map(tool => ({ id: tool.id, name: tool.name, kind: tool.icon, icon: undefined, available: true, tool: true })),
-      ...(deck?.actions ?? []).map(action => ({ ...action, tool: false })),
-    ].map(key => {
-      const Icon = customActionIcon(key.icon) ?? toolIcons[key.kind] ?? Command
-      return <button type="button" key={`${key.tool}:${key.id}`} disabled={busy || !key.available}
-        aria-label={key.name} title={key.name} onClick={() => runKey(key)}>
-        <Icon aria-hidden="true" size={22}/>{!hideShortcutNames && key.name}
-      </button>
-    })}
-      <button type="button" onClick={() => navigate('automations')}><Plus size={22}/> PC kısayollarını yönet</button>
-    </div>}
-
     {conflict && <div className="eon-mirror-conflict" role="alert"><strong>Deck başka cihazda değişmiş.</strong>
       <span>Telefondaki son düzeni alabilir veya kendi düzenini yeniden kaydedebilirsin.</span>
       <button type="button" onClick={() => {
@@ -452,10 +478,18 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
       }}>Son düzeni al</button>
       <button type="button" onClick={() => void save(true)}>Benim düzenimi uygula</button>
     </div>}
-    <div className="eon-mirror-stage" hidden={isKeys}>
+    <div className="eon-mirror-stage">
       <div className="eon-mirror-phone">
-        <div className="eon-mirror-display">
-          <div className={`eon-mirror-grid ${editMode ? 'is-editing' : ''}`} ref={gridRef}
+        <div className={`eon-mirror-display ${isKeys ? 'is-key-page' : ''}`}>
+          {isKeys ? <div className={`eon-mirror-all-keys ${denseKeys ? 'is-dense' : ''}`} aria-label={`Tuşlar ${keyPage + 1}`}>
+            {pageKeys.map(key => <MirrorShortcut key={`${key.tool ? 'tool' : 'action'}:${key.id}`} item={key} busy={busy}
+              phoneTile hideName={hideShortcutNames} onClick={() => {
+                if (key.remoteEnabled === false) setMessage(`PC’de Kısayollar’dan “${key.name}” için telefon erişimini aç.`)
+                else if (!key.available) setMessage('Bu tuş kullanılamıyor.')
+                else runKey(key)
+              }}/>)}
+            {!pageKeys.length && <div className="eon-mirror-keys-notice">{deck ? 'Henüz kısayol yok' : 'Komutlar yükleniyor…'}</div>}
+          </div> : <div className={`eon-mirror-grid ${editMode ? 'is-editing' : ''}`} ref={gridRef}
             onContextMenu={event => {
               event.preventDefault()
               const id = (event.target as Element).closest<HTMLElement>('[data-deck-widget]')?.dataset.deckWidget
@@ -485,7 +519,7 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
             })}
             {editMode && preview && <div className={`eon-mirror-ghost ${!(gesture.current?.mode === 'move' ? moveDeckTile(activeTiles, preview) : patchDeckTile(activeTiles, preview)) ? 'is-invalid' : ''}`}
               aria-hidden="true" style={{ gridColumn: `${preview.x + 1} / span ${preview.w}`, gridRow: `${preview.y + 1} / span ${preview.h}` }}/>}
-          </div>
+          </div>}
           {editingQuick && <div className="eon-mirror-quick-overlay" role="dialog" aria-modal="true" aria-label="Deck hızlı kısayollarını düzenle">
             <header><div><strong>Hızlı erişim tuşları</strong><small>Telefonda ve bilgisayarda aynı altı kısayol görüntülenir.</small></div>
               <button type="button" aria-label="Kısayol düzenleyiciyi kapat" onClick={() => setEditingQuick(false)}><X size={16}/></button></header>
@@ -525,19 +559,35 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
             <footer><button type="button" onClick={() => setDraftQuickIds(null)}>Varsayılan altı tuş</button>
               <button type="button" className="is-done" onClick={() => { setEditingQuick(false); setMessage('Kısayollar hazır. Telefona göndermek için Kaydet.') }}>Tamam</button></footer>
           </div>}
-          <div className="eon-mirror-foot">
+          {isKeys ? <div className="eon-mirror-foot eon-mirror-keys-foot">
+            <div className="eon-mirror-foot-status" role="status">
+              <span className={connected ? 'is-connected' : ''}/>
+              <span>{message || (connected ? snapshot?.hostname || 'Bağlı' : 'Çevrimdışı')}</span>
+            </div>
+            <nav className="eon-mirror-key-pages" aria-label="Deck sayfaları">
+              <button type="button" onClick={() => setSelectedPage('panel')}>Deck</button>
+              {pages.length + keyPageCount < 4 && pages.map(page => <button type="button" key={page.id}
+                onClick={() => setSelectedPage(page.id)}>{page.name}</button>)}
+              {Array.from({ length: keyPageCount }, (_, index) => index)
+                .filter(index => keyPageCount <= 3 || Math.abs(index - keyPage) <= 1)
+                .map(index => <button type="button" key={index} aria-current={index === keyPage ? 'page' : undefined}
+                  onClick={() => setSelectedPage(`keys:${index}`)}>Tuşlar {index + 1}</button>)}
+            </nav>
+            <button type="button" aria-label={denseKeys ? '4×3 tuş dizilimine geç' : '5×3 tuş dizilimine geç'}
+              onClick={() => setDenseKeys(!denseKeys)}>{denseKeys ? '5×3' : '4×3'}</button>
+          </div> : <div className="eon-mirror-foot">
             <div className="eon-mirror-foot-status"><span className={connected ? 'is-connected' : ''}/><span>{message || (connected ? 'USB bağlantısı etkin' : 'Telefona bağlanmak için Cihazlar bölümünü aç')}</span></div>
-            <div className="eon-mirror-foot-pages"><span className="is-current">{currentPage?.name ?? 'Panel'}</span><span>{pages.length + 2} ekran</span></div>
+            <div className="eon-mirror-foot-pages"><span className="is-current">{currentPage?.name ?? 'Deck'}</span><span>{pages.length + 1 + keyPageCount} ekran</span></div>
             <div className="eon-mirror-foot-tools">
               <button type="button" title="Notları aç" aria-label="Notlar" onClick={() => navigate('notes')}><Monitor size={15}/></button>
               <button type="button" title="Ayarları aç" aria-label="Ayarlar" onClick={() => navigate('settings')}><Settings2 size={15}/></button>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
     {(syncError || message) && <div className="eon-mirror-bottom" role="status">{syncError || message}</div>}
-    {contextMenu && <div ref={contextRef} className="eon-mirror-context" role="menu" aria-label="Panel seçenekleri" style={{ left: contextMenu.x, top: contextMenu.y }}
+    {contextMenu && <div ref={contextRef} className="eon-mirror-context" role="menu" aria-label="Deck seçenekleri" style={{ left: contextMenu.x, top: contextMenu.y }}
       onKeyDown={event => {
         const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
         const index = buttons.indexOf(document.activeElement as HTMLButtonElement)

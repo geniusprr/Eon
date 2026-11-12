@@ -1,4 +1,7 @@
 export type PcActionKind = 'application' | 'file' | 'command' | 'lock' | 'shutdown' | 'restart' | 'cancel'
+export function isTimedPowerAction(kind: string, delaySeconds = 0) {
+  return (kind === 'shutdown' || kind === 'restart') && delaySeconds > 0
+}
 export const actionIconIds = ['app', 'code', 'globe', 'gamepad', 'music', 'video', 'camera', 'image', 'folder', 'file', 'terminal', 'settings', 'star', 'heart', 'zap', 'coffee', 'headphones', 'mail', 'calendar', 'book'] as const
 export type ActionIconId = typeof actionIconIds[number]
 export interface PcAction {

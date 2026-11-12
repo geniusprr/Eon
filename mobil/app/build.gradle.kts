@@ -14,6 +14,12 @@ android {
             java.setSrcDirs(listOf("src/eon2/kotlin"))
             kotlin.setSrcDirs(listOf("src/eon2/kotlin"))
         }
+        // The v1 remote-desktop tests remain in the tree for migration, but their
+        // source files are intentionally excluded from the Eon 2 application.
+        getByName("test") {
+            java.setSrcDirs(listOf("src/test/java/com/kapanis/mobil/eon2"))
+            kotlin.setSrcDirs(listOf("src/test/java/com/kapanis/mobil/eon2"))
+        }
     }
 
     defaultConfig {
@@ -63,8 +69,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
-    // Real backdrop sampling/refraction; 1.x matches our Kotlin 2.3 / Compose toolchain.
-    implementation("io.github.kyant0:backdrop:1.0.6")
 
     testImplementation("junit:junit:4.13.2")
     debugImplementation(libs.androidx.ui.tooling)

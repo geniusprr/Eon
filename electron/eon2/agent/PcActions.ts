@@ -42,12 +42,12 @@ export class PcActions {
   save(value: unknown, remote = false) {
     const input = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
     const existing = typeof input?.id === 'string' ? this.actions.find(item => item.id === input.id) : undefined
-    // Only omitted desktop fields receive a default; explicit saved decisions are retained.
+    // New actions default to phone access; an omitted field on an edit keeps the saved choice.
     const action = parseAction(input && input.remoteEnabled === undefined
-      ? { ...input, remoteEnabled: remote ? false : existing?.remoteEnabled ?? true }
+      ? { ...input, remoteEnabled: existing?.remoteEnabled ?? true }
       : value)
-    // A paired phone with shortcut access can create and update shortcuts.
-    if (remote) action.remoteEnabled = true
+    // Only the desktop can change the phone access choice for an existing action.
+    if (remote) action.remoteEnabled = existing?.remoteEnabled ?? true
     const next = [...this.actions.filter(item => item.id !== action.id), action]
     if (next.length > 100) throw new Error('En fazla 100 kısayol kaydedilebilir.')
     this.persist(next)

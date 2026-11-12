@@ -102,7 +102,7 @@ export const APP_EVENTS = {
 } as const
 
 export type AppEventName = (typeof APP_EVENTS)[keyof typeof APP_EVENTS]
-export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed'
+export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed' | 'eon2:ai:navigate' | 'eon2:theme:changed'
 
 export interface BrowserBounds {
   x: number
@@ -469,6 +469,14 @@ export type IpcChannel =
   | 'eon2:actions:delete'
   | 'eon2:actions:execute'
   | 'eon2:actions:pick-app'
+  | 'eon2:ai:state'
+  | 'eon2:ai:configure'
+  | 'eon2:ai:connect'
+  | 'eon2:ai:models'
+  | 'eon2:ai:send'
+  | 'eon2:ai:pending'
+  | 'eon2:ai:approve'
+  | 'eon2:ai:reject'
   | 'eon2:files:list'
   | 'eon2:files:directory'
   | 'eon2:files:choose-directory'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   AppWindow, Ban, Command, FileText, FolderOpen, LockKeyhole, Play,
-  Plus, Power, RotateCw, Save, ShieldCheck, Terminal, Trash2, X,
+  Plus, Power, RotateCw, Save, ShieldCheck, Square, Terminal, Trash2, X,
   type LucideIcon,
 } from 'lucide-react'
 import type { IpcChannel } from '../../../shared/contracts'
@@ -9,10 +9,12 @@ import type { PcAction, PcActionKind } from '../../../shared/eon-controls'
 import { actionIsPower, actionLabels, actionRequiresTarget, actionSummary, newAction, prepareAction } from './actionForm'
 import { cancelScheduledPower } from './actionRegistry'
 import { actionIcons, customActionIcon } from './actionIcons'
-import { actionIconIds } from '../../../shared/eon-controls'
+import { actionIconIds, isTimedPowerAction } from '../../../shared/eon-controls'
+import { usePowerCountdown } from './usePowerCountdown'
 import './action-editor.css'
 
-type TimerState = { action: 'shutdown' | 'restart'; targetAt: number }
+import type { TimerState } from '../../types'
+
 type ActionList = { actions: PcAction[]; timer: TimerState | null }
 
 const icons: Record<PcActionKind, LucideIcon> = {
@@ -37,6 +39,7 @@ function errorText(error: unknown): string {
 export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string[]; clearDrop: () => void }) {
   const [actions, setActions] = useState<PcAction[]>([])
   const [timer, setTimer] = useState<TimerState | null>(null)
+  const countdown = usePowerCountdown(timer?.targetAt)
   const [draft, setDraft] = useState<PcAction | null>(null)
   const [iconSearch, setIconSearch] = useState('')
   const [draggingFile, setDraggingFile] = useState(false)
@@ -163,7 +166,9 @@ export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string
   }
 
   const execute = (action: PcAction) => {
-    const needsConfirmation = action.kind === 'command' || actionIsPower(action.kind)
+    const stopping = countdown && timer?.shortcutId === action.id && timer.action === action.kind
+    const needsConfirmation = !stopping && !isTimedPowerAction(action.kind, action.delaySeconds) &&
+      (action.kind === 'command' || actionIsPower(action.kind))
     if (needsConfirmation) {
       const details = action.kind === 'command' ? '\n\nPowerShell komutu bilgisayarda çalıştırılacak.'
         : action.kind === 'shutdown' || action.kind === 'restart' ? `\n\n${action.delaySeconds} saniye sonra uygulanacak.`
@@ -171,7 +176,7 @@ export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string
       if (!window.confirm(`“${action.name}” çalıştırılsın mı?${details}`)) return
     }
     void runOperation(action.id, () => invoke('eon2:actions:execute', { id: action.id }),
-      `“${action.name}” eylemi çalıştırıldı.`)
+      `“${action.name}” · Komut gönderildi.`)
   }
 
   const cancelTimer = () => {
@@ -221,11 +226,11 @@ export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string
     </div>
 
     {message && <p className={message.error ? 'eon2-error' : 'eon2-pairing-message'} role={message.error ? 'alert' : 'status'}>{message.text}</p>}
-    {timer && <div className="eon2-connection-banner eon2-action-timer">
+    {timer && countdown && <div className="eon2-connection-banner eon2-action-timer">
       <span className="eon2-connection-icon"><Power size={20} aria-hidden="true"/></span>
       <div>
         <strong>{timer.action === 'shutdown' ? 'Bilgisayar kapatma' : 'Yeniden başlatma'} planlandı</strong>
-        <p>{new Date(timer.targetAt).toLocaleString('tr-TR')} · Windows zamanlayıcısı etkin</p>
+        <p role="timer">{countdown}</p>
       </div>
       <button type="button" className="eon2-button eon2-button--outline" disabled={busy} onClick={cancelTimer}>
         <Ban size={15} aria-hidden="true"/> {pending === 'cancel-timer' ? 'İptal ediliyor…' : 'Planı iptal et'}
@@ -245,6 +250,8 @@ export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string
     <div className="eon2-action-grid" aria-busy={busy}>
       {actions.map(action => {
         const Icon = customActionIcon(action.icon) ?? icons[action.kind]
+        const active = countdown && timer?.shortcutId === action.id && timer.action === action.kind
+        const RunIcon = active ? Square : Play
         return <article className={`eon2-control-card ${pending === action.id ? 'eon2-control-card--pending' : ''}`} key={action.id}>
           <div className="eon2-control-card-title">
             <Icon size={21} strokeWidth={1.8} aria-hidden="true"/>
@@ -257,7 +264,8 @@ export function ActionsPane({ droppedPaths, clearDrop }: { droppedPaths?: string
           <code className="eon2-action-target" title={actionSummary(action)}>{actionSummary(action)}</code>
           <div className="eon2-section-actions">
             <button type="button" className="eon2-button eon2-button--primary" disabled={busy} onClick={() => execute(action)}>
-              <Play size={14} aria-hidden="true"/> {pending === action.id ? 'Çalışıyor…' : 'Çalıştır'}
+              <RunIcon size={14} aria-hidden="true"/> {pending === action.id ? 'Komut gönderiliyor…'
+                : active ? <>Durdur <span role="timer">{countdown}</span></> : 'Çalıştır'}
             </button>
             <button type="button" className="eon2-button eon2-button--outline" disabled={busy} onClick={() => openEditor(action)}>Düzenle</button>
             <button type="button" className="eon2-button eon2-button--quiet" aria-label={`${action.name} kısayolunu sil`} disabled={busy} onClick={() => {

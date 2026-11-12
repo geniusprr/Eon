@@ -29,6 +29,10 @@ data class EonPeerStatus(val connected: Boolean, val name: String, val paired: B
 data class UsbPrompt(val id: String, val hostName: String)
 data class DesktopSettings(val theme: String?, val tailscale: Boolean, val autostart: Boolean)
 
+data class EonAiState(val configured: Boolean, val model: String, val models: List<String>)
+data class EonAiReply(val reply: String, val actions: List<String>)
+data class EonPendingCommand(val id: String, val name: String, val command: String, val expiresAt: Long)
+
 data class EonSyncReport(val sent: Int, val received: Int, val duplicated: Int, val conflicted: Int)
 
 /** A concurrent PC-side edit invalidated the revision used by the phone. */
@@ -42,6 +46,9 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
         private val http = OkHttpClient.Builder().connectTimeout(1200, TimeUnit.MILLISECONDS)
             .followRedirects(false).followSslRedirects(false)
             .readTimeout(7, TimeUnit.SECONDS).writeTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).build()
+        // Model inference can take longer than routine device polling. Reuse the same pool.
+        private val aiHttp = http.newBuilder().readTimeout(90, TimeUnit.SECONDS)
+            .callTimeout(95, TimeUnit.SECONDS).build()
     }
     private val prefs = context.getSharedPreferences("eon2-pairing", Context.MODE_PRIVATE)
     private val usbBaseUrl = "http://127.0.0.1:8768"
@@ -137,6 +144,52 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
     }
 
     fun controls(): JSONObject = request("GET", "/v1/actions/list", null, true)
+    fun aiState(): EonAiState {
+        val response = request("GET", "/v1/ai/state", null, true)
+        return EonAiState(response.optBoolean("configured"), response.optString("model"),
+            response.optJSONArray("models")?.stringItems().orEmpty())
+    }
+
+    fun aiModels(): List<String> = request("GET", "/v1/ai/models", null, true)
+        .optJSONArray("models")?.stringItems().orEmpty()
+
+    fun aiSend(content: String, model: String? = null, history: List<Pair<String, String>> = emptyList()): EonAiReply {
+        require(content.isNotBlank() && content.length <= 4000) { "Mesaj 1-4000 karakter olmalı." }
+        require(history.size <= 10 && history.all { (role, message) ->
+            role in setOf("user", "assistant") && message.isNotBlank() && message.length <= 900
+        }) { "AI konuşma geçmişi geçersiz." }
+        val payload = JSONObject().put("content", content.trim())
+        if (!model.isNullOrBlank()) payload.put("model", model)
+        if (history.isNotEmpty()) payload.put("history", JSONArray().apply {
+            history.forEach { (role, message) ->
+                put(JSONObject().put("role", role).put("content", message))
+            }
+        })
+        val response = request("POST", "/v1/ai/send", payload, true)
+        return EonAiReply(response.getString("reply"), response.optJSONArray("actions")?.stringItems().orEmpty())
+    }
+
+    fun aiPendingCommand(): EonPendingCommand? {
+        val response = request("GET", "/v1/ai/pending", null, true)
+        if (response.length() == 0) return null
+        val id = response.getString("id")
+        require(id.isNotBlank()) { "Bekleyen kısayol kimliği eksik." }
+        return EonPendingCommand(id, response.getString("name"), response.getString("command"),
+            response.getLong("expiresAt"))
+    }
+
+    /** Explicit user approval only. Saving the shortcut must never execute its command. */
+    fun aiApproveCommand(id: String): JSONObject {
+        require(id.isNotBlank()) { "Onaylanacak kısayol bulunamadı." }
+        return request("POST", "/v1/ai/approve", JSONObject().put("id", id), true)
+    }
+
+    fun aiRejectCommand(id: String) {
+        require(id.isNotBlank()) { "Reddedilecek kısayol bulunamadı." }
+        val result = request("POST", "/v1/ai/reject", JSONObject().put("id", id), true)
+        check(result.getBoolean("ok")) { "Kısayol önerisi reddedilemedi." }
+    }
+
     fun deck(): JSONObject = request("GET", "/v1/deck", null, true)
     fun deckLayout(): JSONObject = request("GET", "/v1/deck/layout", null, true)
     fun saveDeckLayout(baseRevision: Int, widgets: JSONArray, quickIds: List<String>? = null,
@@ -252,7 +305,7 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
         }
         if (method == "POST") builder.post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
         else builder.get()
-        http.newCall(builder.build()).execute().use { response ->
+        (if (pathname == "/v1/ai/send") aiHttp else http).newCall(builder.build()).execute().use { response ->
             val payload = response.body?.string() ?: ""
             if (!response.isSuccessful) {
                 if (pathname == "/v1/deck/layout" && response.code == 409) {
@@ -263,22 +316,31 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
                     }.getOrNull()
                     throw EonDeckConflictException(current)
                 }
-                if (response.code == 404 && (pathname.startsWith("/v1/files/") || pathname.startsWith("/v1/actions/") || pathname.startsWith("/v1/power/") || pathname.startsWith("/v1/deck"))) {
+                if (response.code == 404 && (pathname.startsWith("/v1/files/") || pathname.startsWith("/v1/actions/") || pathname.startsWith("/v1/power/") || pathname.startsWith("/v1/deck") || pathname.startsWith("/v1/ai/"))) {
                     error("Bilgisayarda açık Eon bu özelliği desteklemiyor. Yeni masaüstü sürümünü açıp tekrar dene.")
                 }
                 if (response.code == 401) throw EonAccessDeniedException()
                 val error = runCatching { JSONObject(payload).optString("error") }.getOrNull()
                 throw IllegalStateException("Eon bağlantısı: HTTP ${response.code}${if (error.isNullOrBlank()) "" else " · $error"}")
             }
+            // Only this endpoint permits a literal JSON null as its successful response.
+            if (pathname == "/v1/ai/pending" && payload.trim() == "null") return JSONObject()
             return JSONObject(payload)
         }
     }
+}
+
+private fun JSONArray.stringItems(): List<String> = (0 until length()).mapNotNull { index ->
+    optString(index).trim().takeIf(String::isNotEmpty)
 }
 
 /** Windows-issued pairing secrets are encrypted at rest by Android Keystore AES-GCM. */
 private class LocalSecretStore(context: Context) {
     private val preferences = context.getSharedPreferences("eon2-secret", Context.MODE_PRIVATE)
     private val alias = "eon2-device-link-v1"
+    // Polling screens authenticate several times per second. Decrypt once per client,
+    // without ever storing the plaintext in SharedPreferences.
+    @Volatile private var cachedSecret: String? = null
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -294,26 +356,36 @@ private class LocalSecretStore(context: Context) {
         return generator.generateKey()
     }
 
-    fun saveSecret(value: String) {
+    @Synchronized fun saveSecret(value: String) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
         val encoded = Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
         check(preferences.edit().putString("encryptedSecret", encoded).commit()) { "Anahtar kaydedilemedi" }
+        cachedSecret = value
     }
 
     fun getSecret(): String? {
-        val stored = preferences.getString("encryptedSecret", null) ?: return null
-        return try {
-            val payload = Base64.decode(stored, Base64.NO_WRAP)
-            if (payload.size < 29) return null
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, payload.copyOfRange(0, 12)))
-            String(cipher.doFinal(payload.copyOfRange(12, payload.size)), Charsets.UTF_8)
-        } catch (_: Exception) { null }
+        cachedSecret?.let { return it }
+        return synchronized(this) {
+            cachedSecret?.let { return@synchronized it }
+            val stored = preferences.getString("encryptedSecret", null) ?: return@synchronized null
+            val decrypted = try {
+                val payload = Base64.decode(stored, Base64.NO_WRAP)
+                if (payload.size < 29) null
+                else {
+                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                    cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, payload.copyOfRange(0, 12)))
+                    String(cipher.doFinal(payload.copyOfRange(12, payload.size)), Charsets.UTF_8)
+                }
+            } catch (_: Exception) { null }
+            cachedSecret = decrypted
+            decrypted
+        }
     }
 
-    fun removeSecret() {
+    @Synchronized fun removeSecret() {
         check(preferences.edit().remove("encryptedSecret").commit())
+        cachedSecret = null
     }
 }

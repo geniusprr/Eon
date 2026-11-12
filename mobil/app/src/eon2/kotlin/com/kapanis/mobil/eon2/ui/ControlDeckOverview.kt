@@ -1,6 +1,5 @@
 package com.kapanis.mobil.eon2.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,12 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,7 +35,7 @@ private val Green = Color(0xFF7BD2A4)
 @Composable
 internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerStatus,message:String?,busy:Boolean,
     onPair:()->Unit,
-    onOpenPcActions:()->Unit,onOpenFiles:()->Unit) {
+    onOpenPcActions:()->Unit) {
     val scope = rememberCoroutineScope()
     val active = peer.connected && peer.paired
     var deck by remember(active, peer.name) { mutableStateOf<JSONObject?>(null) }
@@ -44,20 +43,22 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
     var loadError by remember(active, peer.name) { mutableStateOf<String?>(null) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var sending by remember { mutableStateOf(false) }
+    var refresh by remember { mutableIntStateOf(0) }
     var toConfirm by remember { mutableStateOf<PortraitDeckAction?>(null) }
     val quickActions = remember(deck) { portraitDeckActions(deck) }
     val shortcutsAllowed = deck?.optBoolean("shortcutsAllowed") == true
     val mediaAvailable = deck?.optBoolean("mediaAvailable") == true && shortcutsAllowed && active
     val media = deck?.optJSONObject("media")
 
-    LaunchedEffect(active, peer.name) {
+    LaunchedEffect(active, peer.name, refresh) {
         if (!active) return@LaunchedEffect
         while (isActive) {
             try {
-                deck = withContext(Dispatchers.IO) { client.deck() }
+                val latest = withContext(Dispatchers.IO) { client.deck() }
+                if (deck?.toString() != latest.toString()) deck = latest
                 loadError = null
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { loadError = error.message ?: "Panel verileri alınamadı." }
+            catch (error: Exception) { loadError = error.message ?: "Kontroller yüklenemedi." }
             loading = false
             delay(4500)
         }
@@ -77,7 +78,7 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
                     else client.executeAction(action.id, action.kind)
                 }
                 feedback = action.name + " · Komut gönderildi."
-                deck = withContext(Dispatchers.IO) { client.deck() }
+                refresh++
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { feedback = error.message ?: "Komut çalıştırılamadı." }
             finally { sending = false }
@@ -99,21 +100,15 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
     }
 
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal=24.dp,vertical=20.dp),
-        verticalArrangement=Arrangement.spacedBy(17.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Kontrol merkezi", style=MaterialTheme.typography.headlineLarge)
-                Text("Bilgisayarın, tek dokunuş uzağında.", style=MaterialTheme.typography.bodySmall,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Surface(shape=RoundedCornerShape(14.dp), color=MaterialTheme.colorScheme.primaryContainer) {
-                Icon(Icons.Rounded.Tune, null, Modifier.padding(13.dp).size(23.dp),
-                    tint=MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+        verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            Text("Kontrol", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Bold)
+            Text("Bilgisayarındaki kısayollar ve medya", style=MaterialTheme.typography.bodySmall,
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         Surface(Modifier.fillMaxWidth().eonGlass(), shape=RoundedCornerShape(24.dp), color=Color.Transparent) {
-            Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                     Surface(shape=RoundedCornerShape(15.dp), color=MaterialTheme.colorScheme.primaryContainer) {
                         Icon(Icons.Rounded.Computer, null, Modifier.padding(12.dp).size(25.dp),
@@ -144,11 +139,6 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
                         Button(onClick=onPair, enabled=!busy, modifier=Modifier.fillMaxWidth()) {
                             Text(if (busy) "Onay bekleniyor…" else "Bilgisayarla eşleştir")
                         }
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                        PortraitSystemMetric("İşlemci", peer.system?.optJSONObject("cpu"), Icons.Rounded.Memory, Modifier.weight(1f))
-                        PortraitSystemMetric("Bellek", peer.system?.optJSONObject("memory"), Icons.Rounded.Storage, Modifier.weight(1f))
                     }
                 }
             }
@@ -197,7 +187,9 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
                 Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                     pair.forEach { action ->
                         PortraitDeckTile(action, sending, Modifier.weight(1f)) {
-                            if (action.kind in listOf("command", "lock", "shutdown", "restart", "cancel"))
+                            if (!isTimedPowerAction(action.kind, action.delaySeconds) &&
+                                !isPowerCountdownActive(action.deadline) &&
+                                action.kind in listOf("command", "lock", "shutdown", "restart", "cancel"))
                                 toConfirm = action
                             else sendAction(action)
                         }
@@ -207,27 +199,14 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
             }
         }
 
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-            Text("Medya", style=MaterialTheme.typography.titleMedium,
-                fontWeight=FontWeight.Bold, modifier=Modifier.weight(1f))
-            Text("WINDOWS SESSION", fontSize=10.sp, letterSpacing=1.sp,
-                color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text("Medya", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)
         EonMediaPlayer(media = media, enabled = mediaAvailable && !sending,
             detail = when {
                 !active -> "PC bağlantısı bekleniyor"
                 !shortcutsAllowed -> "PC'de Kısayollar iznini aç"
                 else -> "Bir müzik uygulamasında parça aç"
             }, onMedia = { id, _ -> mediaCommand(id) },
-            modifier = Modifier.fillMaxWidth().height(240.dp))
-        Text("ÇALIŞMA ALANI", fontSize=10.sp, letterSpacing=1.3.sp,
-            color=MaterialTheme.colorScheme.onSurfaceVariant, fontWeight=FontWeight.Bold)
-        PortraitControlRoute(Icons.Rounded.Apps, "PC kısayolları",
-            "Uygulamalar, komutlar ve güç işlemleri", active, onOpenPcActions)
-        PortraitControlRoute(Icons.Rounded.SwapHoriz, "Dosya aktarımı",
-            "USB ve Tailscale üzerinden güvenli dosyalar", active, onOpenFiles)
-        Text("Telefon yatay konumdayken tam ekran Control Deck açılır.",
-            style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
+            modifier = Modifier.fillMaxWidth().height(220.dp))
     }
     toConfirm?.let { action ->
         AlertDialog(onDismissRequest={toConfirm=null}, title={Text(action.name)},
@@ -239,13 +218,14 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
 
 private data class PortraitDeckAction(
     val id:String,val name:String,val kind:String,val tool:Boolean,
-    val available:Boolean,val approved:Boolean
+    val available:Boolean,val approved:Boolean,val delaySeconds:Long=0,val deadline:Long?=null
 )
 
 private fun portraitDeckActions(deck: JSONObject?): List<PortraitDeckAction> {
     if (deck == null) return emptyList()
     val result = mutableListOf<PortraitDeckAction>()
     val allowed = deck.optBoolean("shortcutsAllowed")
+    val sampledAt = deck.optLong("sampledAt", System.currentTimeMillis())
     deck.optJSONArray("tools")?.let { array ->
         for (i in 0 until array.length()) {
             val value = array.optJSONObject(i) ?: continue
@@ -257,7 +237,8 @@ private fun portraitDeckActions(deck: JSONObject?): List<PortraitDeckAction> {
         for (i in 0 until array.length()) {
             val value = array.optJSONObject(i) ?: continue
             result.add(PortraitDeckAction(value.optString("id"),value.optString("name"),
-                value.optString("kind"),false,value.optBoolean("available"),value.optBoolean("remoteEnabled")))
+                value.optString("kind"),false,value.optBoolean("available"),value.optBoolean("remoteEnabled"),
+                value.optLong("delaySeconds"),powerDeadline(value.optLong("activeUntil"),sampledAt)))
         }
     }
     return result.filter { it.id.isNotBlank() && it.name.isNotBlank() }
@@ -276,27 +257,12 @@ private fun portraitActionIcon(kind:String): ImageVector = when(kind) {
 }
 
 @Composable
-private fun PortraitSystemMetric(label:String, value:JSONObject?, icon:ImageVector, modifier:Modifier) {
-    val number = value?.optDouble("usagePercent",Double.NaN)?.takeIf { it.isFinite() && it in 0.0..100.0 }
-    Surface(modifier, shape=RoundedCornerShape(13.dp),color=MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.48f)) {
-        Column(Modifier.padding(12.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                Icon(icon,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(6.dp))
-                Text(label,style=MaterialTheme.typography.labelMedium,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.weight(1f))
-                Text(number?.let { it.toInt().toString()+"%" } ?: "—",fontWeight=FontWeight.Bold)
-            }
-            LinearProgressIndicator(progress={((number?:0.0)/100.0).toFloat()},
-                modifier=Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(8.dp)))
-        }
-    }
-}
-
-@Composable
 private fun PortraitDeckTile(action:PortraitDeckAction, sending:Boolean, modifier:Modifier, onClick:()->Unit) {
     val accent = MaterialTheme.colorScheme.primary
-    Surface(onClick=onClick, enabled=!sending, modifier=modifier.height(90.dp).eonGlass(),
+    val countdown = powerCountdown(action.deadline)
+    Surface(onClick=onClick, enabled=!sending, modifier=modifier.height(90.dp).eonGlass().semantics {
+        if (countdown != null) stateDescription = "Durdur · $countdown"
+    },
         shape=RoundedCornerShape(24.dp),color=Color.Transparent) {
         Column(Modifier.fillMaxSize().padding(12.dp),verticalArrangement=Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -306,6 +272,11 @@ private fun PortraitDeckTile(action:PortraitDeckAction, sending:Boolean, modifie
                 if(!action.available || !action.approved)
                     Icon(Icons.Rounded.Lock,"PC izni gerekli",Modifier.size(15.dp),
                         tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                else if (countdown != null) {
+                    Text(countdown, style=MaterialTheme.typography.labelMedium, color=accent)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.Stop,null,Modifier.size(18.dp),tint=accent)
+                }
                 else Icon(Icons.Rounded.NorthEast,null,Modifier.size(15.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(action.name,maxLines=2,overflow=TextOverflow.Ellipsis,
@@ -313,24 +284,3 @@ private fun PortraitDeckTile(action:PortraitDeckAction, sending:Boolean, modifie
         }
     }
 }
-
-@Composable
-private fun PortraitControlRoute(icon:ImageVector,title:String,detail:String,enabled:Boolean,onClick:()->Unit) {
-    Surface(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth().eonGlass(),
-        shape=RoundedCornerShape(24.dp),color=Color.Transparent) {
-        Row(Modifier.padding(15.dp),verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(11.dp)) {
-                Icon(icon,null,Modifier.padding(10.dp).size(22.dp),tint=MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title,fontWeight=FontWeight.SemiBold)
-                Text(detail,style=MaterialTheme.typography.bodySmall,
-                    color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=2)
-            }
-            Icon(if(enabled) Icons.AutoMirrored.Rounded.ArrowForward else Icons.Rounded.Lock,
-                null,Modifier.size(18.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-

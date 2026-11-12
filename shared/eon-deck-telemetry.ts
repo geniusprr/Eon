@@ -49,7 +49,7 @@ export interface DeckDescription {
   powerAllowed: boolean
   mediaAvailable: boolean
   tools: Array<{ id: string; name: string; icon: string }>
-  actions: Array<{ id: string; name: string; kind: string; remoteEnabled: boolean; available: boolean }>
+  actions: Array<{ id: string; name: string; kind: string; remoteEnabled: boolean; available: boolean; delaySeconds?: number; activeUntil?: number }>
 }
 
 /** Desktop eon2:deck:get; Android /v1/deck has the same shape after permission filtering. */

@@ -1,6 +1,7 @@
 package com.kapanis.mobil.eon2.ui
 
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,8 +51,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.DateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -89,7 +88,7 @@ private data class PhoneFile(
 
 }
 
-private data class PhoneTimer(val action: String, val targetAt: Long)
+private data class PhoneTimer(val action: String, val shortcutId: String, val deadline: Long?)
 private data class PhoneDeck(
     val shortcutsAllowed: Boolean, val powerAllowed: Boolean, val mediaAvailable: Boolean,
     val mediaTitle: String, val mediaArtist: String, val playing: Boolean?,
@@ -120,6 +119,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
     var files by remember { mutableStateOf<List<PhoneFile>>(emptyList()) }
     var deck by remember { mutableStateOf<PhoneDeck?>(null) }
     var timer by remember { mutableStateOf<PhoneTimer?>(null) }
+    var reloadRequest by remember { mutableIntStateOf(0) }
     var loaded by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -132,18 +132,26 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
     var editError by remember { mutableStateOf<String?>(null) }
 
     suspend fun reload() {
+        val request = ++reloadRequest
         if (filesOnly) {
             val result = withContext(Dispatchers.IO) { client.files() }
+            if (request != reloadRequest) return
             val array = result.getJSONArray("files")
             files = (0 until array.length()).map { PhoneFile.read(array.getJSONObject(it)) }
         } else {
             val result = withContext(Dispatchers.IO) { client.controls() }
+            if (request != reloadRequest) return
             val array = result.getJSONArray("actions")
             actions = (0 until array.length()).map { PhoneAction.read(array.getJSONObject(it)) }
-            timer = result.optJSONObject("timer")?.let { PhoneTimer(it.getString("action"), it.getLong("targetAt")) }
-            deck = try { withContext(Dispatchers.IO) { PhoneDeck.read(client.deck()) } }
+            timer = result.optJSONObject("timer")?.let {
+                PhoneTimer(it.getString("action"), it.optString("shortcutId"),
+                    powerDeadline(it.getLong("targetAt"), result.optLong("sampledAt", System.currentTimeMillis())))
+            }
+            val latestDeck = try { withContext(Dispatchers.IO) { PhoneDeck.read(client.deck()) } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null } // Device-level permissions and media are optional on older desktops.
+            if (request != reloadRequest) return
+            deck = latestDeck
         }
         loaded = true
         loadError = null
@@ -151,6 +159,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
 
     fun runOperation(success: String, work: suspend () -> Unit) {
         if (busy) return
+        reloadRequest++
         busy = true
         progress = ""
         notice = null
@@ -164,6 +173,12 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { notice = error.message ?: "İşlem tamamlanamadı. PC izinlerini kontrol et." }
             finally { busy = false; progress = "" }
+        }
+    }
+
+    fun executeAction(action: PhoneAction) {
+        runOperation("${action.name} · Komut PC tarafından kabul edildi.") {
+            withContext(Dispatchers.IO) { client.executeAction(action.id, action.kind) }
         }
     }
 
@@ -218,9 +233,15 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                     withContext(Dispatchers.IO) {
                         val transferContext = currentCoroutineContext()
                         context.contentResolver.openInputStream(selection.uri)?.use { input ->
+                            var lastProgressFrameAt = 0L
                             client.sendFile(selection.name, selection.size, input) { bytes ->
                                 transferContext.ensureActive()
-                                scope.launch { progress = "${formatBytes(bytes)} / ${formatBytes(selection.size)}" }
+                                // Large transfers emit thousands of callbacks; render at most 5 updates/sec.
+                                val now = SystemClock.elapsedRealtime()
+                                if (bytes == selection.size || now - lastProgressFrameAt >= 200L) {
+                                    lastProgressFrameAt = now
+                                    scope.launch { progress = "${formatBytes(bytes)} / ${formatBytes(selection.size)}" }
+                                }
                             }
                         } ?: error("Seçilen dosya açılamadı.")
                     }
@@ -246,13 +267,15 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
         item(key = "heading") {
             Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Kontrol merkezine dön")
+                    if (!filesOnly) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Kontrol merkezine dön")
+                        }
                     }
                     Column(Modifier.weight(1f)) {
-                        Text("PC CONTROL DECK", style = MaterialTheme.typography.labelSmall,
+                        Text(if (filesOnly) "YEREL DOSYA AKTARIMI" else "PC CONTROL DECK", style = MaterialTheme.typography.labelSmall,
                             letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
-                        Text(if (filesOnly) "Dosya aktarımı" else "PC kısayolları",
+                        Text(if (filesOnly) "Local Send" else "PC kısayolları",
                             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     }
                     IconButton(enabled = !busy, onClick = {
@@ -261,14 +284,14 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                         Icon(Icons.Rounded.Refresh, "Listeyi yenile")
                     }
                 }
-                Text(if (filesOnly) "Telefonunla bilgisayarın arasında güvenli dosya alışverişi."
+                Text(if (filesOnly) "Telefon ile bilgisayar arasında doğrudan dosya aktar."
                     else "Uygulama aç, komut çalıştır ve bilgisayarının güç işlemlerini yönet.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                 if (filesOnly) {
                     Button(enabled = !busy, onClick = { openDocument.launch(arrayOf("*/*")) },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)) {
                         Icon(Icons.Rounded.UploadFile, null, Modifier.size(19.dp))
-                        Spacer(Modifier.width(9.dp)); Text("Telefondan PC’ye dosya gönder")
+                        Spacer(Modifier.width(9.dp)); Text("Dosya gönder")
                     }
                 } else {
                     Button(enabled = !busy && loaded && loadError == null,
@@ -300,7 +323,8 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             }
         }
         if (!filesOnly && timer != null) item(key = "timer") {
-            val scheduled = timer!!
+            val scheduled = timer ?: return@item
+            val countdown = powerCountdown(scheduled.deadline) ?: return@item
             val cancel = actions.firstOrNull { it.kind == "cancel" }
             Surface(shape = controlShape, color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .53f)) {
                 Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -309,8 +333,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                         Column {
                             Text(if (scheduled.action == "shutdown") "Kapanış planlandı" else "Yeniden başlatma planlandı",
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(scheduled.targetAt)),
-                                style = MaterialTheme.typography.bodyMedium)
+                            Text(countdown, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     if (cancel != null) {
@@ -397,7 +420,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
         if (loaded && !filesOnly && filteredActions.isEmpty()) item(key = "actions-empty") {
             EmptyControlState(Icons.Rounded.GridView,
                 if (actions.isEmpty()) "Henüz kısayol yok" else "Eşleşen kısayol bulunamadı",
-                if (actions.isEmpty()) "İlk kısayolunu oluştur. PC’de onaylanınca buradan çalıştırabilirsin."
+                if (actions.isEmpty()) "İlk kısayolunu oluştur. Cihaz iznin varsa buradan çalıştırabilirsin."
                 else "Arama metnini veya filtreyi değiştir.")
         }
         if (loaded && filesOnly && filteredFiles.isEmpty()) item(key = "files-empty") {
@@ -407,7 +430,12 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                 else "Arama metnini veya filtreyi değiştir.")
         }
         if (!filesOnly) items(filteredActions, key = { "action-${it.id}" }) { action ->
-            ActionControlCard(action, deck, busy, onExecute = { confirmAction = action }, onEdit = {
+            val deadline = timer?.takeIf { it.shortcutId == action.id && it.action == action.kind }?.deadline
+            val countdown = powerCountdown(deadline)
+            ActionControlCard(action, deck, busy, countdown, onExecute = {
+                if (countdown != null || isTimedPowerAction(action.kind, action.delaySeconds)) executeAction(action)
+                else confirmAction = action
+            }, onEdit = {
                 editing = ActionDraft(action.id, action.name, action.kind, action.target,
                     JSONArray(action.arguments).toString(), action.delaySeconds.toString())
                 editError = null
@@ -417,7 +445,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
         }
         item(key = "permission-hint") {
             Text(if (filesOnly) "Aktarım için PC → Cihazlar → Dosyalar izni açık olmalı. Gelen dosyalar Downloads’a, gönderilenler PC’deki Eon klasörüne otomatik kaydedilir."
-                else "Yeni ve düzenlenen kısayollar PC’den tekrar onaylanmalıdır. Cihaz izni: PC → Cihazlar → Kısayollar / Güç.",
+                else "Yeni kısayollar telefon erişimiyle kaydedilir. Cihaz izni: PC → Cihazlar → Kısayollar / Güç.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
@@ -430,9 +458,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             text = { Text("${actionDescription(action)}\n\nBu işlem bilgisayarında çalıştırılacak. Onaylıyor musun?") },
             confirmButton = { TextButton(enabled = !busy, onClick = {
                 confirmAction = null
-                runOperation("${action.name}: komut PC tarafından kabul edildi.") {
-                    withContext(Dispatchers.IO) { client.executeAction(action.id, action.kind) }
-                }
+                executeAction(action)
             }) { Text(if (action.kind == "cancel") "Planı iptal et" else "Çalıştır") } },
             dismissButton = { TextButton(enabled = !busy, onClick = { confirmAction = null }) { Text("Vazgeç") } })
     }
@@ -477,7 +503,8 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                         label = { Text("Gecikme (saniye)") },
                         supportingText = { Text("1 ile 604800 saniye arasında") },
                         modifier = Modifier.fillMaxWidth())
-                    Text("Kaydedince PC onayı sıfırlanır. PC’den bu kısayola telefon erişimi vermen gerekir.",
+                    Text(if (draft.id == null) "Bu kısayol telefon erişimiyle kaydedilir."
+                        else "Telefon erişimini PC’de Kısayollar bölümünden yönetebilirsin.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall)
                     editError?.let { Text(it, color = MaterialTheme.colorScheme.error,
@@ -487,7 +514,7 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             confirmButton = { TextButton(enabled = canSave, onClick = {
                 try {
                     val payload = validateDraft(draft)
-                    runOperation("Kısayol kaydedildi. PC onayı bekleniyor.") {
+                    runOperation("Kısayol kaydedildi.") {
                         withContext(Dispatchers.IO) { client.saveAction(payload) }
                         editing = null
                     }
@@ -538,11 +565,11 @@ private fun EmptyControlState(icon: ImageVector, heading: String, explanation: S
 }
 
 @Composable
-private fun ActionControlCard(action: PhoneAction, deck: PhoneDeck?, busy: Boolean,
+private fun ActionControlCard(action: PhoneAction, deck: PhoneDeck?, busy: Boolean, countdown: String?,
     onExecute: () -> Unit, onEdit: () -> Unit) {
     val allowed = action.remoteEnabled && (deck == null || actionAllowed(action, deck))
     val permission = when {
-        !action.remoteEnabled -> "PC onayı bekleniyor"
+        !action.remoteEnabled -> "Yalnızca PC"
         deck != null && !actionAllowed(action, deck) -> "Cihaz izni kapalı"
         deck == null -> "PC onaylı"
         else -> "Kullanılabilir"
@@ -570,8 +597,8 @@ private fun ActionControlCard(action: PhoneAction, deck: PhoneDeck?, busy: Boole
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Button(enabled = !busy && allowed, onClick = onExecute, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(13.dp)) {
-                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp)); Text("Çalıştır")
+                    Icon(if (countdown == null) Icons.Rounded.PlayArrow else Icons.Rounded.Stop, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp)); Text(if (countdown == null) "Çalıştır" else "Durdur · $countdown")
                 }
                 OutlinedButton(enabled = !busy, onClick = onEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = RoundedCornerShape(13.dp)) {
@@ -675,7 +702,7 @@ private fun formatBytes(value: Long): String = when {
     else -> String.format(Locale.ROOT, "%.2f GB", value / (1024.0 * 1024 * 1024))
 }
 
-/** Mirrors the desktop's parseAction validation before sending edits for PC approval. */
+/** Mirrors the desktop's parseAction validation before saving. */
 private fun validateDraft(draft: ActionDraft): JSONObject {
     val name = draft.name.trim()
     require(name.isNotBlank() && name.length <= 80) { "Kısayol adı 1–80 karakter olmalı." }
@@ -706,5 +733,5 @@ private fun validateDraft(draft: ActionDraft): JSONObject {
     } else 0L
     return JSONObject().put("id", draft.id ?: UUID.randomUUID().toString())
         .put("name", name).put("kind", draft.kind).put("target", target)
-        .put("arguments", args).put("delaySeconds", seconds).put("remoteEnabled", false)
+        .put("arguments", args).put("delaySeconds", seconds)
 }

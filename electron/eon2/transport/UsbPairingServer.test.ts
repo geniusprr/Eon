@@ -95,6 +95,11 @@ test('control routes enforce distinct grants, signed payloads, HTTP methods and 
     }
     assert.equal((await call('/v1/files/list', 'GET')).status, 401)
     assert.equal((await call('/v1/deck', 'GET')).status, 200)
+    assert.equal((await call('/v1/ai/state', 'GET')).status, 200)
+    assert.equal((await call('/v1/ai/models', 'GET')).status, 200)
+    assert.equal((await call('/v1/ai/send')).status, 401)
+    assert.equal((await call('/v1/ai/approve')).status, 401)
+    assert.equal((await call('/v1/ai/pending', 'GET')).status, 401)
     assert.equal((await call('/v1/deck', 'POST')).status, 405)
     assert.equal((await call('/v1/deck/execute')).status, 401)
     permissions = ['files.transfer']
@@ -104,6 +109,15 @@ test('control routes enforce distinct grants, signed payloads, HTTP methods and 
     assert.equal((await call('/v1/files/chunk')).status, 200)
     assert.equal((await call('/v1/actions/execute')).status, 401)
     permissions = ['actions.execute']
+    assert.equal((await call('/v1/ai/state', 'GET')).status, 401)
+    assert.equal((await call('/v1/ai/send', 'GET')).status, 405)
+    assert.equal((await call('/v1/ai/send', 'POST', true)).status, 401)
+    assert.equal((await call('/v1/ai/send')).status, 200)
+    assert.equal((await call('/v1/ai/approve', 'GET')).status, 405)
+    assert.equal((await call('/v1/ai/pending', 'POST')).status, 405)
+    assert.equal((await call('/v1/ai/pending', 'GET')).status, 200)
+    assert.equal((await call('/v1/ai/approve')).status, 200)
+    assert.equal((await call('/v1/ai/reject')).status, 200)
     assert.equal((await call('/v1/actions/execute')).status, 200)
     assert.equal((await call('/v1/deck/execute', 'POST', true)).status, 401)
     assert.equal((await call('/v1/deck/execute')).status, 200)
@@ -113,7 +127,7 @@ test('control routes enforce distinct grants, signed payloads, HTTP methods and 
     assert.equal((await call('/v1/deck/execute')).status, 401)
     permissions = []
     assert.equal((await call('/v1/power/execute')).status, 401)
-    assert.equal(dispatched.length, 6)
+    assert.equal(dispatched.length, 12)
     assert.ok(dispatched.every(item => item.startsWith('android-a1:')))
   } finally { await server.stop() }
 })

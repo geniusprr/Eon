@@ -185,6 +185,48 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
   } finally { debuggerClient.detach() }
   await wait(100)
   assert.equal(actionCalls, 1, 'a regular click must still execute once')
+
+  phase = 'phone-shortcut-pages'
+  const created = await js(`Promise.all(Array.from({length:8}, (_, index) =>
+    window.kapanisDesktop.invoke('eon2:actions:save', {
+      name:'Test kısayolu ' + (index + 1), kind:'command', target:'Write-Output test', arguments:[], delaySeconds:0,
+      ...(index === 0 ? {remoteEnabled:false} : {}),
+    })))`)
+  assert.ok(created.slice(1).every(action => action.remoteEnabled))
+  const selectPage = value => js(`(() => {
+    const select = document.querySelector('.eon-mirror-pages select')
+    select.value = ${JSON.stringify(value)}
+    select.dispatchEvent(new Event('change', {bubbles:true}))
+  })()`)
+  await selectPage('keys:0')
+  for (let attempt=0; attempt<20; attempt++) {
+    if (await js('document.querySelectorAll(".eon-mirror-all-keys button").length') === 12) break
+    await wait(250)
+  }
+  const measureKeys = () => js(`(() => {
+    const grid = document.querySelector('.eon-mirror-display > .eon-mirror-all-keys')
+    const style = getComputedStyle(grid)
+    const screen = grid.parentElement.getBoundingClientRect()
+    const tile = grid.querySelector('button').getBoundingClientRect()
+    return {
+      columns:style.gridTemplateColumns.split(' ').length, rows:style.gridTemplateRows.split(' ').length,
+      tiles:grid.querySelectorAll('button').length,
+      sameInsets:Math.abs((tile.top - screen.top) - (tile.left - screen.left)) < 1,
+    }
+  })()`)
+  assert.deepEqual(await measureKeys(), {columns:4, rows:3, tiles:12, sameInsets:true})
+  await js('document.querySelector(".eon-mirror-all-keys [data-locked]").click()')
+  assert.equal(actionCalls, 1, 'phone-locked shortcuts must show feedback without running')
+  assert.match(await js('document.querySelector(".eon-mirror-foot-status").textContent'), /telefon erişimini aç/)
+  await js(`[...document.querySelectorAll('.eon-mirror-key-pages button')].find(button => button.textContent === 'Tuşlar 2').click()`)
+  assert.deepEqual(await measureKeys(), {columns:4, rows:3, tiles:4, sameInsets:true})
+  await js(`document.querySelector('[aria-label="5×3 tuş dizilimine geç"]').click()`)
+  assert.deepEqual(await measureKeys(), {columns:5, rows:3, tiles:1, sameInsets:true})
+  await selectPage('keys:0')
+  assert.deepEqual(await measureKeys(), {columns:5, rows:3, tiles:15, sameInsets:true})
+  await fs.writeFile(path.join(target,'mirror-shortcut-pages.png'),(await win.webContents.capturePage()).toPNG())
+  await selectPage('panel')
+
   phase = 'light-theme'
   await js(`window.kapanisDesktop.invoke('eon2:settings:set',{key:'theme',value:'light'})`)
   for (let attempt=0; attempt<15; attempt++) {
@@ -192,7 +234,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
     await wait(300)
   }
   assert.equal(await js('!!document.querySelector(".eon2-app.eon2-theme-light")'), true)
-  assert.equal(await js('getComputedStyle(document.querySelector(".eon-mirror")).getPropertyValue("--mirror-bg").trim()'), '#f4f7f6')
+  assert.equal(await js('getComputedStyle(document.querySelector(".eon-mirror")).getPropertyValue("--mirror-bg").trim()'), '#e5eef7')
   await fs.writeFile(path.join(target,'mirror-light.png'),(await win.webContents.capturePage()).toPNG())
   phase = 'navigation'
   await js(`document.querySelector('.eon2-nav-item[title="Cihazlar"]').click()`)

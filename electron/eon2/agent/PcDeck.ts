@@ -1,4 +1,5 @@
 import type { PcAction } from '../../../shared/eon-controls.js'
+import type { TimerState } from '../../../src/types.js'
 import type { RemotePermission } from '../transport/UsbPairingServer.js'
 
 const deckTools = {
@@ -14,7 +15,7 @@ export type DeckMediaKey = typeof mediaKeys[number]
 
 export function isPowerAction(kind: PcAction['kind']) { return powerKinds.includes(kind) }
 
-export function describeDeck(actions: readonly PcAction[], permissions: readonly RemotePermission[], windowsAvailable: boolean) {
+export function describeDeck(actions: readonly PcAction[], permissions: readonly RemotePermission[], windowsAvailable: boolean, timer?: TimerState | null, local = false) {
   const shortcutsAllowed = permissions.includes('actions.execute')
   const powerAllowed = permissions.includes('power.manage')
   return {
@@ -22,9 +23,11 @@ export function describeDeck(actions: readonly PcAction[], permissions: readonly
     powerAllowed,
     mediaAvailable: windowsAvailable && shortcutsAllowed,
     tools: windowsAvailable ? Object.entries(deckTools).map(([id, tool]) => ({ id, ...tool })) : [],
-    actions: actions.map(({ id, name, kind, remoteEnabled, icon }) => ({
-      id, name, kind, remoteEnabled, ...(icon ? { icon } : {}),
-      available: windowsAvailable && remoteEnabled && (isPowerAction(kind) ? powerAllowed : shortcutsAllowed),
+    actions: actions.map(({ id, name, kind, remoteEnabled, icon, delaySeconds }) => ({
+      id, name, kind, remoteEnabled, delaySeconds, ...(icon ? { icon } : {}),
+      available: windowsAvailable && (local || remoteEnabled) && (isPowerAction(kind) ? powerAllowed : shortcutsAllowed),
+      ...(powerAllowed && (local || remoteEnabled) && timer?.shortcutId === id && timer.action === kind
+        ? { activeUntil: timer.targetAt } : {}),
     })),
   }
 }

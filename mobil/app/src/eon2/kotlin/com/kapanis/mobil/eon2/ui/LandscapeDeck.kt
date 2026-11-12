@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,11 +110,13 @@ private fun cachedLayout(context: android.content.SharedPreferences, key: String
 
 private fun layoutStorageKey(host: String) = "canvasV1_" + quickPreferenceKey(host)
 
-private data class DeckKey(val id: String, val label: String, val kind: String, val available: Boolean, val approved: Boolean = true, val customIcon: String = "") {
+private data class DeckKey(val id: String, val label: String, val kind: String, val available: Boolean,
+    val approved: Boolean = true, val customIcon: String = "", val delaySeconds: Long = 0, val deadline: Long? = null) {
     val nativeTool get() = kind in listOf("folder", "terminal", "chart", "settings")
     val identity get() = "${if (nativeTool) "tool" else "action"}:$id"
     val power get() = kind in listOf("lock", "shutdown", "restart", "cancel")
-    val confirm get() = power || kind == "command"
+    val confirm get() = !isTimedPowerAction(kind, delaySeconds) &&
+        !isPowerCountdownActive(deadline) && (power || kind == "command")
     val icon: ImageVector get() = when (customIcon.ifBlank { kind }) {
         "app" -> Icons.Rounded.Apps
         "code" -> Icons.Rounded.Code
@@ -159,6 +162,7 @@ private data class DeckData(val keys: List<DeckKey>, val shortcutsAllowed: Boole
             val allowed = value.optBoolean("shortcutsAllowed")
             val tools = value.optJSONArray("tools") ?: org.json.JSONArray()
             val actions = value.optJSONArray("actions") ?: org.json.JSONArray()
+            val sampledAt = value.optLong("sampledAt", System.currentTimeMillis())
             val keys = buildList {
                 for (index in 0 until tools.length()) {
                     val item = tools.optJSONObject(index) ?: continue
@@ -171,7 +175,9 @@ private data class DeckData(val keys: List<DeckKey>, val shortcutsAllowed: Boole
                     val id = item.optString("id")
                     val kind = item.optString("kind")
                     if (id.isBlank() || kind !in setOf("application", "file", "command", "lock", "shutdown", "restart", "cancel")) continue
-                    add(DeckKey(id, item.optString("name").ifBlank { kind }, kind, item.optBoolean("available"), item.optBoolean("remoteEnabled"), item.optString("icon")))
+                    add(DeckKey(id, item.optString("name").ifBlank { kind }, kind, item.optBoolean("available"),
+                        item.optBoolean("remoteEnabled"), item.optString("icon"), item.optLong("delaySeconds"),
+                        powerDeadline(item.optLong("activeUntil"), sampledAt)))
                 }
             }
             return DeckData(keys, allowed, value.optBoolean("mediaAvailable"), value.optJSONObject("gpu"), value.optJSONObject("media"), value.has("media"))
@@ -226,13 +232,26 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
     LaunchedEffect(client, lifecycle, peer.connected, peer.paired, peer.name, refresh) {
         if (!peer.connected || !peer.paired) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var lastDeckSnapshot: String? = null
             while (true) {
                 try {
-                    data = withContext(Dispatchers.IO) { DeckData.parse(client.deck()) }
+                    // Status updates are frequent; unchanged responses should not redraw every tile.
+                    val updated = withContext(Dispatchers.IO) {
+                        val response = client.deck()
+                        val snapshot = response.toString()
+                        if (snapshot == lastDeckSnapshot) null
+                        else {
+                            val parsed = DeckData.parse(response)
+                            lastDeckSnapshot = snapshot
+                            parsed
+                        }
+                    }
+                    if (updated != null) data = updated
                     loadError = null
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) {
                     data = null
+                    lastDeckSnapshot = null
                     loadError = error.message ?: "Kısayollar yüklenemedi."
                 }
                 delay(3000)
@@ -275,23 +294,27 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                         catch (_: Exception) { /* Keep local favourites and retry next poll. */ }
                         finally { savingQuick = false }
                     }
-                    remoteLayout = latest
+                    if (remoteLayout != latest) remoteLayout = latest
                     layoutError = null
                     if (editingLayout) {
                         if (latest.revision != draftBaseRevision) layoutConflict = latest
                     } else if (!savingLayout && !savingQuick) {
-                        layout = latest
-                        preferences.edit().putString(layoutPreferenceKey, latest.toJson()).apply()
+                        if (layout != latest) {
+                            layout = latest
+                            preferences.edit().putString(layoutPreferenceKey, latest.toJson()).apply()
+                        }
                     }
                     if (quickKey != null && latest.quickIdsSpecified && !editingQuick && !savingQuick && !editingLayout &&
                         !preferences.getBoolean("pendingQuickV1_$quickKey", false)) {
                         val migrationKey = "syncedQuickV1_$quickKey"
-                        storedQuickIds = latest.quickIds
-                        preferences.edit().apply {
-                            if (latest.quickIds == null) remove(quickKey)
-                            else putString(quickKey, encodeQuickIds(latest.quickIds))
-                            putBoolean(migrationKey, true)
-                        }.apply()
+                        if (storedQuickIds != latest.quickIds || !preferences.getBoolean(migrationKey, false)) {
+                            storedQuickIds = latest.quickIds
+                            preferences.edit().apply {
+                                if (latest.quickIds == null) remove(quickKey)
+                                else putString(quickKey, encodeQuickIds(latest.quickIds))
+                                putBoolean(migrationKey, true)
+                            }.apply()
+                        }
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) { layoutError = error.message ?: "PC paneli okunamadı." }
@@ -354,11 +377,11 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
         if (customIds == null) availableKeys.take(QUICK_SLOT_LIMIT)
         else customIds.mapNotNull { id -> availableKeys.firstOrNull { it.identity == id } }
     }
-    val shortcutPages = keys.chunked(if (denseGrid) 15 else 12)
+    val shortcutPages = remember(keys, denseGrid) { keys.chunked(if (denseGrid) 15 else 12) }
     val pager = rememberPagerState { 1 + layout.pages.size + maxOf(1, shortcutPages.size) }
     var choosingPage by remember { mutableStateOf(false) }
     val pageTitle: (Int) -> String = { index ->
-        if (index == 0) "Panel" else if (index <= layout.pages.size) layout.pages[index - 1].name
+        if (index == 0) "Deck" else if (index <= layout.pages.size) layout.pages[index - 1].name
         else "Tuşlar ${index - layout.pages.size}"
     }
     val beginQuickEdit: () -> Unit = {
@@ -534,7 +557,8 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                     modifier = Modifier.weight(1f).fillMaxWidth()
                 )
             } else HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth(), pageSpacing = 12.dp,
-                beyondViewportPageCount = 0) { page ->
+                // Keep the adjacent Deck ready before a swipe instead of composing all tiles mid-gesture.
+                beyondViewportPageCount = 1) { page ->
                 if (page == 0) {
                     DeckDashboard(peer, foreground, quickKeys, running, data, loadError, selectKey,
                         layout = layout,
@@ -572,8 +596,8 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                     else Box(Modifier.size(7.dp).background(if (paired) teal else amber, CircleShape))
                     Text(result ?: when {
                         running -> "Gönderiliyor…"
-                        pager.currentPage == 0 && paired && layoutError != null -> "Panel eşitlenemedi: $layoutError"
-                        pager.currentPage == 0 && paired && remoteLayout == null -> "PC paneli eşitleniyor…"
+                            pager.currentPage == 0 && paired && layoutError != null -> "Deck eşitlenemedi: $layoutError"
+                            pager.currentPage == 0 && paired && remoteLayout == null -> "PC Deck düzeni eşitleniyor…"
                         else -> stateText
                     },
                         style = MaterialTheme.typography.labelMedium, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -595,7 +619,7 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                 if (!editingQuick && !editingLayout && pager.pageCount > 4) TextButton(onClick = { choosingPage = true },
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("Ekranlar") }
                 if (!editingQuick && !editingLayout) for (page in 0 until pager.pageCount) {
-                    val label = if (page == 0) "Panel" else if (page <= layout.pages.size) layout.pages[page - 1].name
+                    val label = if (page == 0) "Deck" else if (page <= layout.pages.size) layout.pages[page - 1].name
                         else "Tuşlar ${page - layout.pages.size}"
                     if (pager.pageCount <= 4 || page in (pager.currentPage - 1)..(pager.currentPage + 1) || page == 0) {
                         TextButton(onClick = { scope.launch { pager.animateScrollToPage(page) } }, modifier = Modifier.heightIn(min = 48.dp),
@@ -1163,14 +1187,27 @@ private fun KeyMatrix(keys: List<DeckKey>, columns: Int, rows: Int, running: Boo
 
 @Composable
 private fun DeckTile(key: DeckKey, compact: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier, hideShortcutNames: Boolean = false) {
+    val countdown = powerCountdown(key.deadline)
     val shape = RoundedCornerShape(if (compact) 14.dp else 17.dp)
-    val tint = if (key.available && key.approved) key.tint else muted
-    Surface(onClick = onClick, enabled = enabled, modifier = modifier.deckGlass(shape), shape = shape, color = Color.Transparent,
+    val tint = if (countdown != null) teal else if (key.available && key.approved) key.tint else muted
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier.deckGlass(shape).semantics {
+        if (countdown != null) {
+            contentDescription = "${key.label} · Durdur"
+            stateDescription = countdown
+        }
+    }, shape = shape, color = Color.Transparent,
         border = BorderStroke(1.dp, tint.copy(alpha = if (key.available && key.approved) .36f else .18f)),
         tonalElevation = 0.dp) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Brush.linearGradient(
             listOf(tint.copy(alpha = if (key.available && key.approved) .12f else .025f), Color.Transparent)))) {
-            if (hideShortcutNames) {
+            if (countdown != null) {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Icon(Icons.Rounded.Stop, null, Modifier.size(if (compact) 20.dp else 24.dp), tint = tint)
+                    Text(countdown, color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                        maxLines = 1)
+                }
+            } else if (hideShortcutNames) {
                 Icon(key.icon, key.label, Modifier.align(Alignment.Center).size(if (compact) 25.dp else 30.dp), tint = tint)
             } else if (compact && maxWidth < 118.dp) {
                 Column(Modifier.align(Alignment.Center).padding(horizontal = 5.dp),

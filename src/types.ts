@@ -4,6 +4,7 @@ export interface TimerState {
   action: TimerAction
   targetAt: number
   durationSeconds: number
+  shortcutId?: string
 }
 
 export type AlarmSoundProfile = 'gentle' | 'chime' | 'urgent'

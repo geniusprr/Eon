@@ -1,0 +1,155 @@
+/* AI is an Eon workspace surface. The existing Deck keeps its own layout. */
+.eon2-app .eon2-content--board {flex-direction:column;gap:8px;overflow-y:auto;}
+.eon2-app .eon-ai-home {
+  flex:none; position:relative; max-width:1240px; width:100%; align-self:center;
+  background:var(--glass-content,var(--e-panel)); border:1px solid var(--glass-edge,var(--e-stroke));
+  border-radius:16px; padding:4px; color:var(--e-text);
+  box-shadow:inset 0 1px 0 var(--glass-light,transparent);
+}
+.eon-ai-home-status {display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;border:0;border-bottom:1px solid var(--e-stroke);background:transparent;color:var(--e-muted);font-size:12px;padding:6px 12px;}
+.eon-ai-widgets {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.eon-ai-widgets>div {display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--e-stroke);border-radius:10px;background:var(--e-panel-2);font-size:11px;color:var(--e-muted);}
+.eon-ai-widgets strong {color:var(--e-text);font-size:13px;}
+.eon-ai-settings-icon {width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;color:var(--e-accent);background:color-mix(in srgb,var(--e-accent-deep) 15%,var(--e-panel-2));border:1px solid var(--e-stroke);}
+.eon-ai-composer {display:flex;align-items:end;gap:10px;width:100%;border:1px solid var(--e-stroke);border-radius:14px;background:var(--e-panel);padding:7px;}
+.eon-ai-composer:focus-within {border-color:var(--e-accent-deep);box-shadow:0 0 0 2px color-mix(in srgb,var(--e-accent-deep) 14%,transparent);}
+.eon-ai-composer>input,.eon-ai-composer>textarea {display:block;min-height:39px;width:100%;flex:1;min-width:0;resize:vertical;border:0!important;outline:none!important;box-shadow:none!important;background:transparent!important;color:var(--e-text)!important;padding:9px 11px!important;line-height:1.55;}
+.eon-ai-composer.is-compact {padding:0 2px 0 10px;align-items:center;gap:4px;border:0;border-radius:12px;background:transparent;}
+.eon-ai-command-icon {flex:none;color:var(--e-accent-deep);}
+.eon-ai-composer.is-compact>.eon-ai-command-input {font-size:13px;}
+.eon-ai-send {display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:none;min-height:40px;padding:0 15px;border:1px solid var(--e-accent);border-radius:10px;background:var(--e-accent)!important;color:var(--e-bg)!important;font-size:12px!important;font-weight:700!important;}
+.eon-ai-send:hover:not(:disabled) {filter:brightness(1.08);}
+.eon-ai-model {display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;color:var(--e-muted);font-size:11px;}
+.eon-ai-model>span {font-size:11px;font-weight:650;white-space:nowrap;}
+.eon-ai-model input {width:min(320px,35vw);min-width:100px;border:1px solid var(--e-stroke);border-radius:9px;background:var(--e-panel-2);padding:7px 9px;color:var(--e-text);font-size:11px;outline-offset:2px;}
+.eon-ai-model svg {margin-left:-30px;pointer-events:none;flex:none;color:var(--e-subtle);}
+.eon-ai-model.is-compact {position:relative;flex:0 1 168px;}
+.eon-ai-model.is-compact input {width:100%;min-width:0;padding:7px 24px 7px 10px;text-overflow:ellipsis;}
+.eon-ai-model.is-compact svg {position:absolute;right:8px;margin:0;}
+.eon-ai-composer.is-compact .eon-ai-send {width:34px;min-height:34px;padding:0;}
+.eon-ai-connectivity {margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--e-muted);white-space:nowrap;font-size:11px;}
+.eon-ai-connectivity>span {display:block;width:7px;height:7px;flex:none;border-radius:50%;background:#dfa965;}
+.eon-ai-connectivity.is-configured>span {background:#70d9a5;}
+.eon-ai-icon-button {display:grid;place-items:center;width:32px;height:34px;flex:none;border:0;border-radius:9px;background:transparent;color:var(--e-muted);}
+.eon-ai-icon-button:hover {color:var(--e-text);background:var(--e-panel-2);}
+.eon-ai-home :is(button,.eon-ai-model input):focus-visible {outline:2px solid var(--e-accent-deep);outline-offset:1px;}
+
+.eon-ai-workspace {display:grid;grid-template-columns:minmax(175px,230px) minmax(0,1fr);height:100%;min-height:490px;max-height:100%;gap:17px;}
+.eon-ai-threads,.eon-ai-chat {min-width:0;min-height:0;border:1px solid var(--glass-edge,var(--e-stroke));border-radius:18px;background:var(--glass-content,var(--e-panel));box-shadow:var(--glass-shadow,0 10px 30px #0002);}
+.eon-ai-threads {display:flex;flex-direction:column;gap:14px;padding:14px;}
+.eon-ai-new {width:100%;min-height:41px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid var(--e-stroke);border-radius:11px;background:var(--e-panel-2);color:var(--e-text);font-weight:650;font-size:12px;}
+.eon-ai-new:hover {border-color:var(--e-accent-deep);}
+.eon-ai-thread-list {display:flex;flex-direction:column;gap:5px;overflow:auto;min-height:0;flex:1;scrollbar-width:thin;}
+.eon-ai-thread {display:flex;align-items:center;border-radius:9px;border:1px solid transparent;min-width:0;}
+.eon-ai-thread.is-selected {background:var(--e-panel-2);border-color:var(--e-stroke);}
+.eon-ai-thread>button:first-child {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:0;background:none;text-align:left;font-size:12px;padding:11px 8px;}
+.eon-ai-thread>button:last-child {flex:none;display:grid;place-items:center;width:29px;height:29px;border:0;background:none;color:var(--e-muted);}
+.eon-ai-thread>button:last-child:hover {color:#f0a6aa;}
+.eon-ai-threads>small {font-size:10px;line-height:1.5;color:var(--e-subtle);}
+.eon-ai-chat {display:flex;flex-direction:column;overflow:hidden;}
+.eon-ai-chat-header {padding:20px 24px 16px;border-bottom:1px solid var(--e-stroke);display:flex;align-items:center;gap:15px;justify-content:space-between;flex:none;}
+.eon-ai-eyebrow {font-size:10px;font-weight:740;letter-spacing:1.3px;color:var(--e-accent-deep);}
+.eon-ai-chat-header h1 {font-family:'Outfit Variable',system-ui,sans-serif;font-weight:600;font-size:24px;letter-spacing:-.04em;margin:2px 0 0;line-height:1.2;}
+.eon-ai-chat-header h1 span {font-size:14px;letter-spacing:0;font-weight:450;color:var(--e-muted);}
+.eon-ai-chat-actions {display:flex;align-items:center;gap:8px;}
+.eon-ai-chat-actions button {display:flex;align-items:center;gap:7px;border:1px solid var(--e-stroke);border-radius:10px;padding:9px 11px;background:var(--e-panel-2);font-size:11px;}
+.eon-ai-chat-actions button:hover:not(:disabled) {border-color:var(--e-accent-deep);}
+.eon-ai-chat-history {flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:20px;padding:27px clamp(20px,4vw,70px);}
+.eon-ai-welcome {margin:auto;max-width:490px;text-align:center;color:var(--e-muted);}
+.eon-ai-welcome-icon {display:grid;place-items:center;margin:0 auto 16px;width:58px;height:58px;border:1px solid var(--e-stroke);border-radius:18px;background:var(--e-panel-2);color:var(--e-accent-deep);}
+.eon-ai-welcome h2 {font-family:'Outfit Variable',system-ui,sans-serif;color:var(--e-text);font-size:26px;letter-spacing:-.05em;font-weight:580;margin:0 0 8px;}
+.eon-ai-welcome p {font-size:12px;line-height:1.8;margin:0;}
+.eon-ai-suggestions {display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px;}
+.eon-ai-suggestions button {border:1px solid var(--e-stroke);background:var(--e-panel-2);border-radius:9px;padding:9px 12px;font-size:11px;}
+.eon-ai-suggestions button:hover {border-color:var(--e-accent-deep);}
+.eon-ai-turn {display:flex;align-items:flex-start;gap:12px;max-width:900px;min-width:0;}
+.eon-ai-turn.is-user {align-self:flex-end;flex-direction:row-reverse;max-width:min(85%,680px);}
+.eon-ai-turn-avatar {width:33px;height:33px;flex:none;display:grid;place-items:center;border:1px solid var(--e-stroke);border-radius:11px;background:var(--e-panel-2);font-size:10px;font-weight:750;}
+.eon-ai-turn.is-assistant .eon-ai-turn-avatar {color:var(--e-accent-deep);}
+.eon-ai-turn-body {min-width:0;}
+.eon-ai-turn.is-user .eon-ai-turn-body {padding:10px 15px 12px;border:1px solid var(--e-stroke);border-radius:14px 4px 14px 14px;background:var(--e-panel-2);}
+.eon-ai-turn-label {font-size:10px;color:var(--e-subtle);font-weight:760;}
+.eon-ai-turn-body p {white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0 0;font-size:13px;line-height:1.74;}
+.eon-ai-turn-markdown {overflow-wrap:anywhere;font-size:13px;line-height:1.7;}
+.eon-ai-turn-markdown :is(h1,h2,h3,h4) {font-weight:680;line-height:1.35;margin:12px 0 8px;}
+.eon-ai-turn-markdown :is(h1,h2) {font-size:17px;}
+.eon-ai-turn-markdown h3 {font-size:14px;}
+.eon-ai-turn-markdown p {white-space:normal;}
+.eon-ai-turn-markdown ul,.eon-ai-turn-markdown ol {padding-left:19px;margin:10px 0;}
+.eon-ai-turn-markdown li {padding:2px 0;}
+.eon-ai-turn-markdown li p {display:inline;}
+.eon-ai-turn-markdown a {color:var(--e-accent-deep);text-decoration:underline;text-underline-offset:3px;}
+.eon-ai-turn-markdown code {font:12px/1.55 'Geist Mono Variable',Consolas,monospace;border-radius:5px;background:var(--e-panel-2);padding:1px 4px;}
+.eon-ai-turn-markdown pre {padding:12px;max-width:100%;overflow:auto;border-radius:9px;border:1px solid var(--e-stroke);background:var(--e-panel-2);}
+.eon-ai-turn-markdown pre code {padding:0;border-radius:0;background:transparent;white-space:pre;}
+.eon-ai-turn-markdown blockquote {margin:12px 0;padding:3px 14px;border-left:3px solid var(--e-accent-deep);color:var(--e-muted);}
+.eon-ai-turn-markdown table {display:block;max-width:100%;overflow:auto;border-collapse:collapse;margin:10px 0;font-size:12px;}
+.eon-ai-turn-markdown th,.eon-ai-turn-markdown td {border:1px solid var(--e-stroke);padding:7px 9px;}
+.eon-ai-turn.is-error .eon-ai-turn-body p {color:#f2a2ab;}
+.eon-ai-actions {display:flex;flex-direction:column;gap:7px;margin-top:14px;padding:12px;border:1px solid var(--e-stroke);border-radius:10px;background:var(--e-panel-2);font-size:11px;}
+.eon-ai-actions strong {font-size:11px;color:var(--e-text);}
+.eon-ai-actions span {display:flex;align-items:flex-start;gap:7px;overflow-wrap:anywhere;color:var(--e-muted);}
+.eon-ai-actions svg {flex:none;color:#84d2ae;}
+.eon-ai-actions .is-failed svg {color:#f2a2ab;}
+.eon-ai-thinking {display:flex;align-items:center;gap:8px;color:var(--e-muted);font-size:12px;}
+.eon-ai-pending {flex:none;margin:4px clamp(20px,4vw,70px) 0;border:1px solid #d4ac7377;background:color-mix(in srgb,#cb9f58 8%,var(--e-panel));border-radius:13px;padding:14px 16px;max-height:260px;overflow:auto;}
+.eon-ai-pending-header {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.eon-ai-pending-header>div>span {font-size:10px;letter-spacing:1.2px;font-weight:800;color:#e5b978;}
+.eon-ai-pending-header h2 {font-size:15px;font-weight:700;letter-spacing:-.015em;margin:4px 0 0;overflow-wrap:anywhere;}
+.eon-ai-pending-header>svg {color:#e2b57c;flex:none;}
+.eon-ai-pending p {font-size:11px;line-height:1.6;color:var(--e-muted);margin:9px 0;}
+.eon-ai-pending pre {font:11px/1.55 'Geist Mono Variable',Consolas,monospace;background:var(--e-bg);padding:12px;border:1px solid var(--e-stroke);border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:110px;overflow:auto;margin:11px 0;user-select:text;}
+.eon-ai-pending small {display:block;font-size:10px;color:var(--e-subtle);margin-bottom:9px;}
+.eon-ai-pending-actions {display:flex;gap:9px;align-items:center;justify-content:flex-end;}
+.eon-ai-pending-actions button {display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--e-stroke);padding:9px 12px;font-size:11px;font-weight:680;background:var(--e-panel-2);}
+.eon-ai-pending-actions .eon-ai-approve {border-color:var(--e-accent-deep);background:var(--e-accent);color:var(--e-bg);}
+.eon-ai-pending-result {display:flex;align-items:center;gap:8px;flex:none;margin:8px clamp(20px,4vw,70px) 0;font-size:11px;color:#92ddbb;}
+.eon-ai-pending-result.is-error {color:#f2a2ab;}
+.eon-ai-chat-bottom {padding:14px clamp(20px,4vw,70px) 17px;flex:none;border-top:1px solid var(--e-stroke);}
+.eon-ai-chat-controls {display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.eon-ai-chat-bottom .eon-ai-composer textarea {min-height:65px;max-height:170px;}
+.eon-ai-inline-error {display:flex;align-items:flex-start;gap:7px;margin:10px 0 0;color:#f2a2ab;font-size:11px;line-height:1.5;}
+.eon-ai-inline-error svg {flex:none;}
+.eon-ai-disclaimer {font-size:10px;color:var(--e-subtle);margin:9px 2px 0;}
+.eon-ai-spin {animation:eon-ai-spin 1.15s linear infinite;}
+@keyframes eon-ai-spin {to{transform:rotate(360deg)}}
+
+.eon-ai-dialog-backdrop {position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:24px;background:#000a;}
+.eon-ai-dialog {width:min(510px,100%);max-height:90vh;overflow-y:auto;border:1px solid var(--glass-edge,var(--e-stroke));border-radius:21px;background:var(--glass-content,var(--e-panel));color:var(--e-text);padding:23px;box-shadow:0 24px 75px #0007;}
+.eon-ai-dialog header {display:flex;align-items:center;gap:12px;margin-bottom:25px;}
+.eon-ai-dialog header>div:nth-child(2) {flex:1;}
+.eon-ai-dialog header h2 {margin:0;font-family:'Outfit Variable',system-ui,sans-serif;font-weight:650;font-size:20px;letter-spacing:-.03em;}
+.eon-ai-dialog header p {font-size:11px;color:var(--e-muted);margin:4px 0 0;}
+.eon-ai-dialog header>button {border:0;background:transparent;color:var(--e-muted);padding:7px;}
+.eon-ai-account-connect {display:flex;align-items:center;gap:10px;width:100%;min-height:51px;padding:11px 14px;border:1px solid var(--e-accent-deep);border-radius:11px;background:color-mix(in srgb,var(--e-accent-deep) 13%,var(--e-panel-2));color:var(--e-text);font-size:13px;font-weight:680;}
+.eon-ai-account-connect span {flex:1;text-align:left;}
+.eon-ai-account-connect:hover:not(:disabled) {background:color-mix(in srgb,var(--e-accent-deep) 22%,var(--e-panel-2));}
+.eon-ai-method-divider {display:flex;align-items:center;gap:10px;font-size:10px;color:var(--e-subtle);font-weight:700;letter-spacing:1px;text-align:center;margin:22px 0;}
+.eon-ai-method-divider:before,.eon-ai-method-divider:after {content:'';flex:1;border-top:1px solid var(--e-stroke);}
+.eon-ai-dialog form {display:flex;flex-direction:column;gap:19px;}
+.eon-ai-dialog form>label:not(.eon-ai-model) {display:flex;flex-direction:column;gap:8px;font-weight:640;font-size:12px;}
+.eon-ai-dialog form>label>span {font-weight:450;color:var(--e-muted);}
+.eon-ai-dialog form>label:not(.eon-ai-model) input {width:100%;border:1px solid var(--e-stroke);border-radius:10px;background:var(--e-panel-2);color:var(--e-text);padding:12px 13px;font:inherit;}
+.eon-ai-dialog form>.eon-ai-clear {display:flex!important;flex-direction:row!important;align-items:center;gap:9px!important;color:var(--e-muted);font-weight:450!important;font-size:11px!important;}
+.eon-ai-dialog .eon-ai-clear input {width:16px!important;height:16px!important;accent-color:var(--e-accent-deep);}
+.eon-ai-dialog .eon-ai-model {display:flex;justify-content:space-between;gap:10px;}
+.eon-ai-dialog .eon-ai-model input {flex:1;width:auto;}
+.eon-ai-key-note {color:var(--e-muted);font-size:11px;line-height:1.6;margin:-5px 0 0;}
+.eon-ai-dialog footer {display:flex;justify-content:flex-end;align-items:center;gap:9px;margin-top:3px;}
+.eon-ai-dialog footer button {display:flex;align-items:center;gap:8px;min-height:39px;padding:0 16px;border:1px solid var(--e-stroke);border-radius:10px;background:var(--e-panel-2);font-size:12px;font-weight:680;}
+.eon-ai-dialog footer .eon-ai-save {background:var(--e-accent);border-color:var(--e-accent);color:var(--e-bg);}
+@media(max-width:980px) {.eon-ai-workspace {grid-template-columns:160px minmax(0,1fr);gap:10px;}.eon-ai-chat-history {padding:20px;}.eon-ai-chat-bottom {padding:12px 20px;}.eon-ai-pending {margin-inline:20px;}.eon-ai-pending-result {margin-inline:20px;}}
+@media(max-width:760px) {
+  .eon-ai-model.is-compact {flex-basis:124px;}
+  .eon-ai-connectivity {display:none;}
+  .eon-ai-workspace {display:flex;flex-direction:column;min-height:0;}
+  .eon-ai-threads {flex:none;display:flex;flex-direction:row;align-items:center;padding:7px;gap:8px;}
+  .eon-ai-new {flex:none;width:auto;padding:0 9px;font-size:0;}
+  .eon-ai-thread-list {flex-direction:row;align-items:center;}
+  .eon-ai-thread {flex:none;max-width:200px;}
+  .eon-ai-threads>small {display:none;}
+  .eon-ai-chat {flex:1;min-height:0;}
+  .eon-ai-chat-header {padding:12px 16px;}
+  .eon-ai-chat-controls .eon-ai-model input {width:min(220px,36vw);}
+}
+@media(prefers-reduced-motion:reduce) {.eon-ai-spin {animation:none;}}

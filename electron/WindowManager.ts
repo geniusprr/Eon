@@ -772,8 +772,9 @@ async function listAppPathPrograms(): Promise<ProgramCandidate[]> {
         currentKey = trimmed
         continue
       }
-      const match = trimmed.match(/^\(Default\)\s+REG_\w+\s+(.+)$/i)
-      if (!match) continue
+      // /ve already limits output to the default value, whose label is localized.
+      const match = trimmed.match(/^.+?\s+REG_(?:SZ|EXPAND_SZ)\s+(.+)$/i)
+      if (!currentKey || !match) continue
       const candidatePath = extractProgramPath(match[1])
       if (!candidatePath || !isProgramPath(candidatePath) || !await fileExists(candidatePath)) continue
       candidates.push({

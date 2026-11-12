@@ -254,6 +254,7 @@ class EonNotesRepository(context: Context) : SQLiteOpenHelper(context.applicatio
         try {
             var applied = 0
             var duplicate = 0
+            val changedNoteIds = mutableSetOf<String>()
             for (index in 0 until incoming.length()) {
                 val op = incoming.getJSONObject(index)
                 CanonicalNotes.verifyOperation(op, vaultId)
@@ -274,14 +275,34 @@ class EonNotesRepository(context: Context) : SQLiteOpenHelper(context.applicatio
                 check(op.getString("deviceId") != deviceId) { "Uzak cihaz yerel işlem kimliğini kullanamaz." }
                 insertOperation(db, op)
                 applied++
+                changedNoteIds += revision.getString("noteId")
             }
-            val projection = projectHeads(operations(db))
+            // A repeated delta contains no new state. Avoid reparsing the entire journal
+            // and rewriting every note just to acknowledge operations already committed.
+            if (changedNoteIds.isEmpty()) {
+                val conflicted = db.rawQuery("SELECT COUNT(*) FROM notes WHERE conflict=1", null).use { cursor ->
+                    cursor.moveToFirst()
+                    cursor.getInt(0)
+                }
+                db.setTransactionSuccessful()
+                return SyncApplyResult(0, duplicate, conflicted)
+            }
+            val allOperations = operations(db)
+            val projection = projectHeads(allOperations)
             var conflicted = 0
-            val revisions = operations(db).map { it.getJSONObject("revision") }.associateBy { it.getString("id") }
+            val revisions = allOperations.map { it.getJSONObject("revision") }.associateBy { it.getString("id") }
             val collisions = collidingNotes(projection, revisions)
+            // Path collisions can affect other notes; previous conflicts must also be
+            // revisited so that a newly resolved collision is cleared on both sides.
+            val previouslyConflicted = db.rawQuery("SELECT id FROM notes WHERE conflict=1", null).use { cursor ->
+                buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
+            }
+            val affectedNoteIds = changedNoteIds + collisions + previouslyConflicted
             projection.forEach { (noteId, state) ->
-                if (state.second.isNotEmpty() || state.first.size > 1 || noteId in collisions) {
-                    conflicted++
+                val hasConflict = state.second.isNotEmpty() || state.first.size > 1 || noteId in collisions
+                if (hasConflict) conflicted++
+                if (noteId !in affectedNoteIds) return@forEach
+                if (hasConflict) {
                         db.execSQL("INSERT OR IGNORE INTO notes(id,title,body,revision_id,modified_at,deleted,conflict) VALUES(?,?,?,?,?,0,1)",
                             arrayOf<Any>(noteId,"Çakışan not sürümleri","",state.first.firstOrNull() ?: "",System.currentTimeMillis()))
                         // readRow excludes deleted rows. A concurrent edit of a deleted note

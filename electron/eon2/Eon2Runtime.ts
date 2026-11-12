@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, dialog, ipcMain, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { isAppTheme, type AppTheme } from '../../src/theme.js'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -21,6 +21,9 @@ import { ScrcpyManager, type ScrcpyOptions } from './remote/ScrcpyManager.js'
 import { ScrcpyPresentation } from './remote/ScrcpyPresentation.js'
 import { TailscaleDetector, type TailnetStatus } from './transport/TailscaleDetector.js'
 import { DeckLayoutConflictError, DeckLayoutStore } from './deck/DeckLayoutStore.js'
+import { EonAiService } from './ai/EonAiService.js'
+import { connectOpenRouter } from './ai/OpenRouterOAuth.js'
+import { createWindowsShortcut, inspectWindowsApplication } from './agent/WindowsShortcuts.js'
 
 /** Minimal Eon 2 process: it starts no browser, LibreChat, Supabase or LAN service. */
 export async function startEon2Runtime(preloadPath: string, rendererTarget: string) {
@@ -58,7 +61,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   const deckTelemetry = new WindowsDeckTelemetry(systemDirectory)
   const actions = new PcActions(path.join(storage, 'pc-actions.json'), async action => {
     if (process.platform !== 'win32') throw new Error('PC eylemleri Windows gerektirir.')
-    if (action.kind === 'shutdown' || action.kind === 'restart') return power.scheduleShutdown(action.kind, Math.max(1, action.delaySeconds))
+    if (action.kind === 'shutdown' || action.kind === 'restart') return power.toggleShutdown(action.kind, action.delaySeconds, action.id)
     if (action.kind === 'cancel') return power.cancelShutdown()
     if (action.kind === 'lock') return executeFile(path.join(systemDirectory, 'rundll32.exe'), ['user32.dll,LockWorkStation'], { windowsHide: true, timeout: 5000 })
     if (action.kind === 'file') {
@@ -81,6 +84,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     }
     return executeFile(path.join(systemDirectory, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(action.target, 'utf16le').toString('base64')], { windowsHide: true, timeout: 30_000, maxBuffer: 65536 })
   })
+  let ai: EonAiService | null = null
   const transfers = new FileTransfers(path.join(storage, 'Received'), path.join(storage, 'transfer-directory.json'))
   const usb = new UsbPairingServer(credentials, {
     phoneApprovalRequested: () => notifyPhoneRequest?.(),
@@ -92,9 +96,22 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       return updateSettings(body, fromUsb)
     },
     controls: async (pathname, body, deviceId) => {
+      if (pathname.startsWith('/v1/ai/')) {
+        if (!ai) throw new Error('AI hizmeti henüz hazır değil.')
+        if (pathname === '/v1/ai/state') return ai.state()
+        if (pathname === '/v1/ai/models') return ai.models()
+        if (pathname === '/v1/ai/send') {
+          const permissions = credentials.list().find(device => device.id === deviceId)?.permissions ?? []
+          return ai.send(body, { notesWrite: permissions.includes('notes.write'), systemRead: permissions.includes('system.read') })
+        }
+        if (pathname === '/v1/ai/pending') return ai.pending()
+        if (pathname === '/v1/ai/approve') return ai.approve(readTextField(body, 'id', 90))
+        if (pathname === '/v1/ai/reject') return { ok: ai.reject(readTextField(body, 'id', 90)) }
+        throw new Error('Bilinmeyen AI işlemi.')
+      }
       if (pathname === '/v1/deck') {
         const permissions = credentials.list().find(device => device.id === deviceId)?.permissions ?? []
-        const deck = describeDeck(actions.list(), permissions, process.platform === 'win32')
+        const deck = describeDeck(actions.list(), permissions, process.platform === 'win32', power.getTimerStatus())
         return { ...deck, ...deckTelemetry.snapshot(deck.shortcutsAllowed) }
       }
       if (pathname === '/v1/deck/execute') {
@@ -124,7 +141,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
         if (!transfers.list(deviceId).some(file => file.id === id)) throw new Error('Dosyaya erişim yok.')
         return { ok: await transfers.cancel(id) }
       }
-      if (pathname === '/v1/actions/list') return { actions: actions.list(), timer: power.getTimerStatus() }
+      if (pathname === '/v1/actions/list') return { actions: actions.list(), timer: power.getTimerStatus(), sampledAt: Date.now() }
       if (pathname === '/v1/actions/save') return actions.save(body, true)
       const id = readTextField(body, 'id', 90)
       const action = actions.list().find(item => item.id === id)
@@ -164,6 +181,8 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
         fs.writeFileSync(themePath, JSON.stringify(next), { mode: 0o600 })
         sharedTheme = next
         windows.setTheme(next === 'light' ? 'light' : 'dark')
+        const renderer = windows.getMainWindow()?.webContents
+        if (renderer && !renderer.isDestroyed()) renderer.send('eon2:theme:changed', next)
       }
     } else if (canManageWindows && key === 'autostart' && typeof next === 'boolean' && process.platform === 'win32') {
       app.setLoginItemSettings({ openAtLogin: next, path: process.execPath, args: loginArgs })
@@ -279,6 +298,26 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     })
   }
   const contents = mainWindow.webContents
+  ai = new EonAiService({
+    dataDir: storage,
+    actions,
+    deckLayout,
+    secureStorage: safeStorage,
+    navigate: section => { if (!contents.isDestroyed()) contents.send('eon2:ai:navigate', section) },
+    listApplications: refresh => windows.listPrograms(refresh),
+    inspectApplication: application => inspectWindowsApplication(application.path),
+    createDesktopShortcut: (application, name) => createWindowsShortcut(app.getPath('desktop'), application.path, name),
+    launchApplication: target => windows.launchProgram(target),
+    pcStatus: () => {
+      const { cpu, memory, disk, uptimeSeconds } = telemetry.snapshot()
+      return { cpu, memory, disk, uptimeSeconds }
+    },
+    mediaKey: key => {
+      if (process.platform !== 'win32' || !input.mediaKey(key)) throw new Error('Windows medya tuşunu kabul etmedi.')
+    },
+    createNote: note => notes.save(note),
+    setTheme: async theme => { await updateSettings({ key: 'theme', value: theme }, false) },
+  })
   const stopScrcpyEvents = scrcpy.subscribe(status => {
     if (!contents.isDestroyed()) contents.send('eon2:scrcpy:changed', status)
   })
@@ -317,8 +356,8 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   handle('eon2:system-snapshot', () => telemetry.snapshot())
   handle('eon2:deck:get', () => {
     // Local desktop controls are available independently of phone-specific grants.
-    const deck = describeDeck(actions.list().map(action => ({ ...action, remoteEnabled: true })),
-      ['actions.execute', 'power.manage'], process.platform === 'win32')
+    const deck = describeDeck(actions.list(),
+      ['actions.execute', 'power.manage'], process.platform === 'win32', power.getTimerStatus(), true)
     return { ...deck, ...deckTelemetry.snapshot(true) }
   })
   handle('eon2:deck:layout:get', () => deckLayout.get())
@@ -380,6 +419,19 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   handle('eon2:actions:save', payload => actions.save(payload))
   handle('eon2:actions:delete', payload => actions.remove(readTextField(payload, 'id', 90)))
   handle('eon2:actions:execute', payload => actions.execute(readTextField(payload, 'id', 90)))
+  handle('eon2:ai:state', () => ai!.state())
+  handle('eon2:ai:configure', payload => ai!.configure(payload))
+  handle('eon2:ai:connect', async () => {
+    if (!safeStorage.isEncryptionAvailable() || safeStorage.getSelectedStorageBackend?.() === 'basic_text') {
+      throw new Error('OpenRouter bağlantısı için işletim sisteminin şifreli anahtar kasası gerekiyor.')
+    }
+    return ai!.configure({ apiKey: await connectOpenRouter(url => shell.openExternal(url)) })
+  })
+  handle('eon2:ai:models', () => ai!.models())
+  handle('eon2:ai:send', payload => ai!.send(payload))
+  handle('eon2:ai:pending', () => ai!.pending())
+  handle('eon2:ai:approve', payload => ai!.approve(readTextField(payload, 'id', 90)))
+  handle('eon2:ai:reject', payload => ({ ok: ai!.reject(readTextField(payload, 'id', 90)) }))
   handle('eon2:files:list', () => transfers.list())
   handle('eon2:files:directory', () => transfers.getDirectory())
   handle('eon2:files:choose-directory', async () => {
@@ -568,6 +620,8 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       for (const channel of ['window:minimize', 'window:toggle-maximize', 'window:is-maximized', 'window:close', 'window:show',
         'eon2:theme:set', 'eon2:settings:get', 'eon2:settings:set', 'eon2:settings:import', 'eon2:settings:export', 'eon2:files:drop', 'eon2:actions:drop', 'eon2:pairing:state',
         'eon2:actions:list', 'eon2:actions:save', 'eon2:actions:delete', 'eon2:actions:execute', 'eon2:actions:pick-app',
+        'eon2:ai:state', 'eon2:ai:configure', 'eon2:ai:connect', 'eon2:ai:models', 'eon2:ai:send',
+        'eon2:ai:pending', 'eon2:ai:approve', 'eon2:ai:reject',
         'eon2:files:list', 'eon2:files:offer', 'eon2:files:cancel', 'eon2:permissions:set',
         'eon2:files:directory', 'eon2:files:choose-directory', 'eon2:files:open-directory', 'eon2:files:open', 'eon2:files:save-as',
         'eon2:system-snapshot', 'eon2:deck:get', 'eon2:deck:layout:get', 'eon2:deck:layout:set', 'eon2:deck:execute', 'eon2:devices', 'eon2:paired-devices', 'eon2:pairing:begin', 'eon2:pairing:cancel', 'eon2:pairing:revoke',

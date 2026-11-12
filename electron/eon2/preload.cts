@@ -12,6 +12,8 @@ const channels = new Set<string>([
   'eon2:theme:set',
   'eon2:settings:get', 'eon2:settings:set', 'eon2:settings:import', 'eon2:settings:export', 'eon2:files:drop', 'eon2:actions:drop', 'eon2:pairing:state',
   'eon2:actions:list', 'eon2:actions:save', 'eon2:actions:delete', 'eon2:actions:execute', 'eon2:actions:pick-app',
+  'eon2:ai:state', 'eon2:ai:configure', 'eon2:ai:connect', 'eon2:ai:models', 'eon2:ai:send',
+  'eon2:ai:pending', 'eon2:ai:approve', 'eon2:ai:reject',
   'eon2:files:list', 'eon2:files:offer', 'eon2:files:cancel', 'eon2:permissions:set',
   'eon2:files:directory', 'eon2:files:choose-directory', 'eon2:files:open-directory', 'eon2:files:open', 'eon2:files:save-as',
   'eon2:pairing:begin', 'eon2:pairing:cancel', 'eon2:pairing:revoke',
@@ -33,7 +35,7 @@ const bridge: ElectronDesktopBridge = {
     return ipcRenderer.invoke(channel, payload)
   },
   on(event: DesktopEventName, listener: (payload: unknown) => void) {
-    if (event !== 'eon2:scrcpy:changed') throw new Error('Eon 2 olayına erişim reddedildi.')
+    if (event !== 'eon2:scrcpy:changed' && event !== 'eon2:ai:navigate' && event !== 'eon2:theme:changed') throw new Error('Eon 2 olayına erişim reddedildi.')
     const callback = (_event: Electron.IpcRendererEvent, payload: unknown) => listener(payload)
     ipcRenderer.on(event, callback)
     return () => { ipcRenderer.off(event, callback) }
