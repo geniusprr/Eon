@@ -19,6 +19,7 @@ import { DeviceCredentials } from './transport/DeviceCredentials.js'
 import { UsbPairingServer, EON_USB_PORT } from './transport/UsbPairingServer.js'
 import { ScrcpyManager, type ScrcpyOptions } from './remote/ScrcpyManager.js'
 import { ScrcpyPresentation } from './remote/ScrcpyPresentation.js'
+import { PcRemoteDesktop } from './remote/PcRemoteDesktop.js'
 import { TailscaleDetector, type TailnetStatus } from './transport/TailscaleDetector.js'
 import { DeckLayoutConflictError, DeckLayoutStore } from './deck/DeckLayoutStore.js'
 import { EonAiService } from './ai/EonAiService.js'
@@ -85,8 +86,14 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return executeFile(path.join(systemDirectory, 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(action.target, 'utf16le').toString('base64')], { windowsHide: true, timeout: 30_000, maxBuffer: 65536 })
   })
   let ai: EonAiService | null = null
+  let pcRemote: PcRemoteDesktop | null = null
   const transfers = new FileTransfers(path.join(storage, 'Received'), path.join(storage, 'transfer-directory.json'))
   const usb = new UsbPairingServer(credentials, {
+    remoteDesktop: (...args) => {
+      if (!pcRemote) throw new Error('Ekran paylaşımı başlatılıyor.')
+      pcRemote.route(...args)
+    },
+    remoteDisconnected: transport => pcRemote?.disconnect(transport),
     phoneApprovalRequested: () => notifyPhoneRequest?.(),
     deckLayoutGet: () => deckLayout.get(),
     deckLayoutSet: body => deckLayout.set(body),
@@ -276,6 +283,9 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   const attachInterval = setInterval(() => { void attachUsbDevices() }, 3500)
   attachInterval.unref?.()
   const mainWindow = windows.createMainWindow(rendererTarget)
+  pcRemote = new PcRemoteDesktop(path.join(path.dirname(preloadPath), 'remote', 'pc-capture-preload.cjs'),
+    mainWindow, input, () => windows.showMain(),
+    device => credentials.list().some(item => item.id === device.id && item.pairedAt === device.pairedAt))
   const scrcpyPresentation = new ScrcpyPresentation(mainWindow, scrcpy)
   void windows.configureTray(() => windows.quit())
   let showingPairing = false
@@ -322,9 +332,12 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     if (!contents.isDestroyed()) contents.send('eon2:scrcpy:changed', status)
   })
   contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace) scrcpyPresentation.layout(null)
+    if (mainFrame && !inPlace) {
+      scrcpyPresentation.layout(null)
+      pcRemote?.stop('Eon penceresi yeniden yüklendi.')
+    }
   })
-  contents.on('render-process-gone', () => { scrcpy.stop() })
+  contents.on('render-process-gone', () => { scrcpy.stop(); pcRemote?.stop('Eon penceresi kapandı.') })
   // A top-level redirect to an untrusted page must never inherit the privileged
   // preload, even though IPC handlers already check the sender instance.
   const rendererEntry = new URL(rendererTarget)
@@ -573,7 +586,12 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   })
   handle('eon2:pairing:state', payload => usb.approval.desktopState(readTextField(payload, 'id', 90)))
   handle('eon2:pairing:cancel', () => { usb.cancelPairing(); return true })
-  handle('eon2:pairing:revoke', (payload) => usb.revoke(readTextField(payload, 'id', 90)))
+  handle('eon2:pairing:revoke', payload => {
+    const id = readTextField(payload, 'id', 90)
+    const revoked = usb.revoke(id)
+    if (revoked) pcRemote?.revokeDevice(id)
+    return revoked
+  })
   handle('eon2:notes:list', () => notes.list())
   handle('eon2:notes:conflicts', () => notes.getConflicts())
   handle('eon2:notes:manifest', () => notes.getManifest())
@@ -613,6 +631,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       clearInterval(attachInterval)
       clearInterval(tailnetInterval)
       scrcpy.dispose()
+      pcRemote?.dispose()
       stopScrcpyEvents()
       scrcpyPresentation.dispose()
       void transfers.close().catch(() => console.warn('[eon2] incomplete transfer cleanup failed'))

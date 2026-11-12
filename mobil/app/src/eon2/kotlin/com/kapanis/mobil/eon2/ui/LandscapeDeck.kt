@@ -13,6 +13,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -218,6 +223,9 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
     }
     var draftHideShortcutNames by remember(layoutPreferenceKey) { mutableStateOf(false) }
     var editingQuick by remember(peerPreferenceKey) { mutableStateOf(false) }
+    var editingShortcuts by remember(layoutPreferenceKey) { mutableStateOf(false) }
+    var shortcutSelectionChanged by remember(layoutPreferenceKey) { mutableStateOf(false) }
+    var shortcutEditBase by remember(layoutPreferenceKey) { mutableStateOf<DeckLayout?>(null) }
     var editingQuickPageId by remember(layoutPreferenceKey) { mutableStateOf<String?>(null) }
     var draftQuickIds by remember(peerPreferenceKey) { mutableStateOf<List<String>>(emptyList()) }
     var savingQuick by remember(peerPreferenceKey) { mutableStateOf(false) }
@@ -377,17 +385,26 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
         if (customIds == null) availableKeys.take(QUICK_SLOT_LIMIT)
         else customIds.mapNotNull { id -> availableKeys.firstOrNull { it.identity == id } }
     }
-    val shortcutPages = remember(keys, denseGrid) { keys.chunked(if (denseGrid) 15 else 12) }
-    val pager = rememberPagerState { 1 + layout.pages.size + maxOf(1, shortcutPages.size) }
+    val distinctKeys = remember(keys) { keys.distinctBy { it.identity } }
+    val shortcutKeys = remember(distinctKeys, layout.shortcutIds) {
+        val byId = distinctKeys.associateBy { it.identity }
+        layout.shortcutIds?.mapNotNull(byId::get) ?: distinctKeys
+    }
+    val shortcutScroll = rememberLazyGridState()
+    val pager = rememberPagerState { 2 + layout.pages.size }
+    val shortcutsSelected = pager.settledPage == layout.pages.size + 1
     var choosingPage by remember { mutableStateOf(false) }
     val pageTitle: (Int) -> String = { index ->
-        if (index == 0) "Deck" else if (index <= layout.pages.size) layout.pages[index - 1].name
-        else "Tuşlar ${index - layout.pages.size}"
+        if (index == 0) "Deck" else layout.pages.getOrNull(index - 1)?.name ?: "Kısayollar"
     }
     val beginQuickEdit: () -> Unit = {
-        val page = layout.pages.getOrNull(pager.currentPage - 1)
+        val page = layout.pages.getOrNull(pager.settledPage - 1)
+        editingShortcuts = shortcutsSelected
+        shortcutEditBase = remoteLayout
+        shortcutSelectionChanged = false
         editingQuickPageId = page?.id
-        draftQuickIds = ((page?.quickIds ?: if (page != null) null else storedQuickIds)
+        draftQuickIds = if (shortcutsSelected) layout.shortcutIds ?: distinctKeys.map { it.identity }
+        else ((page?.quickIds ?: if (page != null) null else storedQuickIds)
             ?: availableKeys.take(QUICK_SLOT_LIMIT).map { it.identity }).filter { it in knownIds }
         draftHideShortcutNames = layout.hideShortcutNames
         editingQuick = true
@@ -399,23 +416,26 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
     }
     val layoutEditable = paired && data?.shortcutsAllowed == true && remoteLayout != null && layoutError == null
     fun saveQuickSelection(ids: List<String>?) {
+        if (savingQuick) return
+        val isShortcuts = editingShortcuts
         val pageId = editingQuickPageId
         val key = peerPreferenceKey ?: return
-        val value = ids?.distinct()?.filter { it in knownIds }?.take(QUICK_SLOT_LIMIT)
-        if (pageId == null) {
+        val value = if (isShortcuts) ids?.distinct() else ids?.distinct()?.filter { it in knownIds }?.take(QUICK_SLOT_LIMIT)
+        val isMainQuick = !isShortcuts && pageId == null
+        if (isMainQuick) {
             storedQuickIds = value
             preferences.edit().apply {
                 if (value == null) remove(key) else putString(key, encodeQuickIds(value))
                 putBoolean("pendingQuickV1_$key", true)
             }.apply()
         }
-        editingQuick = pageId != null
-        if (!layoutEditable || savingQuick) {
-            result = if (pageId == null) "Hızlı tuşlar telefona kaydedildi. PC eşitlemesi için izin ve bağlantı gerekli."
+        if (!layoutEditable) {
+            if (isMainQuick) editingQuick = false
+            result = if (isMainQuick) "Hızlı tuşlar telefona kaydedildi. PC eşitlemesi için izin ve bağlantı gerekli."
                 else "Bu sayfanın değişiklikleri PC bağlantısı ve izin olmadığından kaydedilemedi."
             return
         }
-        val original = remoteLayout ?: return
+        val original = (if (isShortcuts) shortcutEditBase else remoteLayout) ?: return
         if (pageId != null && original.pages.none { it.id == pageId }) {
             result = "Bu sayfa PC'den kaldırılmış. Güncel düzeni yükle."
             return
@@ -428,25 +448,26 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
             try {
                 val response = withContext(Dispatchers.IO) {
                     DeckLayout.parse(client.saveDeckLayout(original.revision, widgetsToJson(original.widgets), value,
-                        updateQuickIds = pageId == null,
+                        updateQuickIds = isMainQuick,
                         pages = if (pageId != null || original.pagesSpecified || original.pages.isNotEmpty())
-                            pagesToJson(changedPages) else null, hideShortcutNames = draftHideShortcutNames))
+                            pagesToJson(changedPages) else null, hideShortcutNames = draftHideShortcutNames,
+                        shortcutIds = value, updateShortcutIds = isShortcuts))
                 }
                 layout = response
                 remoteLayout = response
                 layoutPreferenceKey?.let { preferences.edit().putString(it, response.toJson()).apply() }
                 editingQuick = false
-                if (pageId == null) preferences.edit().putBoolean("syncedQuickV1_$key", true)
+                if (isMainQuick) preferences.edit().putBoolean("syncedQuickV1_$key", true)
                     .putBoolean("pendingQuickV1_$key", false).apply()
                 layoutError = null
-                result = "Hızlı tuşlar PC’ye kaydedildi."
+                result = if (isShortcuts) "Kısayollar ekranı kaydedildi." else "Hızlı tuşlar PC’ye kaydedildi."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (conflict: EonDeckConflictException) {
                 quickConflict = conflict.serverLayout?.let { runCatching { DeckLayout.parse(it) }.getOrNull() }
                     ?: runCatching { withContext(Dispatchers.IO) { DeckLayout.parse(client.deckLayout()) } }.getOrNull()
                 result = "PC'deki hızlı tuşlar değişmiş. Güncel düzeni yükleyebilirsin."
             } catch (error: Exception) {
-                result = if (pageId == null)
+                result = if (isMainQuick)
                     "Telefona kaydedildi; PC’ye aktarılamadı: ${error.message ?: "Bağlantı hatası"}."
                     else "Bu sayfanın kısayolları kaydedilemedi: ${error.message ?: "Bağlantı hatası"}. Tekrar dene."
             } finally { savingQuick = false }
@@ -454,7 +475,7 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
     }
     val beginLayoutEdit: () -> Unit = {
         if (layoutEditable) {
-            val page = layout.pages.getOrNull(pager.currentPage - 1)
+            val page = layout.pages.getOrNull(pager.settledPage - 1)
             editingLayoutPageId = page?.id
             draftLayout = page?.widgets ?: layout.widgets
             draftBaseRevision = layout.revision
@@ -513,6 +534,7 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
         }
     }
     BackHandler(enabled = editingQuick || editingLayout) {
+        if (savingQuick || savingLayout) return@BackHandler
         if (editingLayout) discardLayout() else editingQuick = false
     }
     Surface(color = Color.Transparent, contentColor = ink, modifier = Modifier.fillMaxSize()) {
@@ -544,13 +566,16 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                     hideShortcutNames = draftHideShortcutNames,
                     onHideNamesChange = { draftHideShortcutNames = it },
                     namesEditable = layoutEditable && !savingQuick,
-                    knownKeys = keys,
-                    authorised = availableKeys,
-                    selectedIds = draftQuickIds.filter { it in knownIds },
-                    onChange = { draftQuickIds = it },
+                    shortcutScreen = editingShortcuts,
+                    saving = savingQuick,
+                    canSave = !savingQuick && (!editingShortcuts || layoutEditable) && quickConflict == null,
+                    knownKeys = distinctKeys,
+                    authorised = if (editingShortcuts) distinctKeys else availableKeys,
+                    selectedIds = draftQuickIds,
+                    onChange = { draftQuickIds = it; shortcutSelectionChanged = true },
                     onSave = {
                         // Existing favourites remain when an action temporarily loses permission.
-                        saveQuickSelection(draftQuickIds)
+                        saveQuickSelection(if (editingShortcuts && !shortcutSelectionChanged) shortcutEditBase?.shortcutIds else draftQuickIds)
                     },
                     onReset = { saveQuickSelection(null) },
                     onCancel = { editingQuick = false },
@@ -558,7 +583,8 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                 )
             } else HorizontalPager(state = pager, modifier = Modifier.weight(1f).fillMaxWidth(), pageSpacing = 12.dp,
                 // Keep the adjacent Deck ready before a swipe instead of composing all tiles mid-gesture.
-                beyondViewportPageCount = 1) { page ->
+                beyondViewportPageCount = 1,
+                key = { index -> if (index == 0) "panel" else layout.pages.getOrNull(index - 1)?.id ?: "keys" }) { page ->
                 if (page == 0) {
                     DeckDashboard(peer, foreground, quickKeys, running, data, loadError, selectKey,
                         layout = layout,
@@ -581,16 +607,28 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                             else result = "PC'de Kısayollar iznini aç."
                         })
                 } else {
-                    val pageKeys = shortcutPages.getOrNull(page - 1 - layout.pages.size).orEmpty()
-                    if (pageKeys.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        DeckNotice(paired, peer.connected, data != null, loadError, onConnect) { refresh++ }
+                    if (shortcutKeys.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (paired && data != null && loadError == null && layout.shortcutIds != null) {
+                            Text("Bu ekranda kısayol yok. Düzenleyerek ekleyebilirsin.", color = muted)
+                        } else DeckNotice(paired, peer.connected, data != null, loadError, onConnect) { refresh++ }
                     } else {
-                        KeyMatrix(pageKeys, if (denseGrid) 5 else 4, 3, running, selectKey,
-                            Modifier.fillMaxSize(), compact = denseGrid, hideShortcutNames = layout.hideShortcutNames)
+                        BoxWithConstraints(Modifier.fillMaxSize()) {
+                            val rowHeight = ((maxHeight - 14.dp) / 3).coerceAtLeast(48.dp)
+                            LazyVerticalGrid(columns = GridCells.Fixed(if (denseGrid) 5 else 4),
+                                state = shortcutScroll, modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(7.dp),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                items(shortcutKeys, key = { it.identity }) { key ->
+                                    DeckTile(key, denseGrid, !running, { selectKey(key) },
+                                        Modifier.fillMaxWidth().height(rowHeight), layout.hideShortcutNames)
+                                }
+                            }
+                        }
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+                EonRotationButton("Dikey moda geç", onPortrait, enabled = !savingQuick && !savingLayout)
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     if (running) CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp, color = teal)
                     else Box(Modifier.size(7.dp).background(if (paired) teal else amber, CircleShape))
@@ -616,50 +654,44 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                     } },
                     confirmButton = { TextButton(onClick = { choosingPage = false }) { Text("Kapat") } },
                 )
-                if (!editingQuick && !editingLayout && pager.pageCount > 4) TextButton(onClick = { choosingPage = true },
-                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Ekranlar") }
-                if (!editingQuick && !editingLayout) for (page in 0 until pager.pageCount) {
-                    val label = if (page == 0) "Deck" else if (page <= layout.pages.size) layout.pages[page - 1].name
-                        else "Tuşlar ${page - layout.pages.size}"
-                    if (pager.pageCount <= 4 || page in (pager.currentPage - 1)..(pager.currentPage + 1) || page == 0) {
-                        TextButton(onClick = { scope.launch { pager.animateScrollToPage(page) } }, modifier = Modifier.heightIn(min = 48.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp)) {
-                            Text(label, color = if (pager.currentPage == page) teal else muted,
-                                fontWeight = if (pager.currentPage == page) FontWeight.Bold else FontWeight.Medium,
-                                style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
                 if (!editingQuick && !editingLayout) {
-                    if (pager.currentPage <= layout.pages.size) {
-                        if (layoutError != null) IconButton(onClick = { layoutRefresh++ },
-                            modifier = Modifier.size(48.dp)) {
+                    val selectedPage = pager.settledPage
+                    IconButton(onClick = { scope.launch { pager.animateScrollToPage(selectedPage - 1) } },
+                        enabled = selectedPage > 0) {
+                        Icon(Icons.Rounded.KeyboardArrowLeft, "Önceki ekran")
+                    }
+                    TextButton(onClick = { choosingPage = true }, modifier = Modifier.widthIn(max = 160.dp).height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)) {
+                        Text(pageTitle(selectedPage), color = teal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(Icons.Rounded.ArrowDropDown, "Ekranları seç", Modifier.size(17.dp))
+                    }
+                    IconButton(onClick = { scope.launch { pager.animateScrollToPage(selectedPage + 1) } },
+                        enabled = selectedPage < pager.pageCount - 1) {
+                        Icon(Icons.Rounded.KeyboardArrowRight, "Sonraki ekran")
+                    }
+                    if (shortcutsSelected) {
+                        TextButton(onClick = {
+                            denseGrid = !denseGrid
+                            preferences.edit().putBoolean("denseGrid", denseGrid).apply()
+                        }, modifier = Modifier.height(48.dp).semantics {
+                            contentDescription = if (denseGrid) "4 sütunlu dizilime geç" else "5 sütunlu dizilime geç"
+                        }, contentPadding = PaddingValues(horizontal = 5.dp)) {
+                            Text(if (denseGrid) "5 sütun" else "4 sütun", fontSize = 11.sp, color = teal)
+                        }
+                    } else {
+                        if (layoutError != null) IconButton(onClick = { layoutRefresh++ }) {
                             Icon(Icons.Rounded.SyncProblem, "Panel eşitlemesini yeniden dene", Modifier.size(20.dp))
                         }
-                        IconButton(onClick = beginLayoutEdit, enabled = paired && data != null,
-                            modifier = Modifier.size(48.dp)) {
+                        IconButton(onClick = beginLayoutEdit, enabled = paired && data != null) {
                             Icon(Icons.Rounded.DashboardCustomize, "12×6 panel bileşenlerini düzenle", Modifier.size(20.dp))
                         }
                     }
-                    TextButton(onClick = {
-                        denseGrid = !denseGrid
-                        preferences.edit().putBoolean("denseGrid", denseGrid).apply()
-                    }, modifier = Modifier.heightIn(min = 48.dp).semantics {
-                        contentDescription = if (denseGrid) "Tuş dizilimi 5 sütun 3 satır. 4 sütuna geç."
-                            else "Tuş dizilimi 4 sütun 3 satır. 5 sütuna geç."
-                    }, contentPadding = PaddingValues(horizontal = 5.dp)) {
-                        Text(if (denseGrid) "5×3" else "4×3", fontSize = 11.sp, color = teal)
+                    IconButton(onClick = beginQuickEdit, enabled = if (shortcutsSelected) layoutEditable else paired && data != null) {
+                        Icon(Icons.Rounded.Tune, if (shortcutsSelected) "Kısayollar ekranını düzenle"
+                            else "Altı hızlı eylemi seç ve sırala", Modifier.size(20.dp))
                     }
-                    IconButton(onClick = beginQuickEdit, enabled = paired && data != null && pager.currentPage <= layout.pages.size,
-                        modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.Tune, "Altı hızlı eylemi seç ve sırala", Modifier.size(20.dp))
-                    }
-                } else if (editingQuick || editingLayout) {
-                    Text("Düzenleme modu", color = teal, style = MaterialTheme.typography.labelMedium)
                 }
-                IconButton(onClick = onPortrait, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.StayCurrentPortrait, "Dikey moda geç", Modifier.size(21.dp))
-                }
+
             }
         }
     }
@@ -694,12 +726,12 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
     }
     quickConflict?.let { latest ->
         AlertDialog(onDismissRequest = { }, title = { Text("Kısayollar PC'de değişti") },
-            text = { Text("PC düzeninin revizyonu ${latest.revision}. PC'deki güncel hızlı tuşları yükleyebilir veya telefon tercihini koruyabilirsin.") },
+            text = { Text("PC düzeninin revizyonu ${latest.revision}. PC'deki düzeni yükleyebilir veya değişikliklerine dönüp yeniden kaydedebilirsin.") },
             confirmButton = {
                 TextButton(onClick = {
                     layout = latest
                     remoteLayout = latest
-                    if (editingQuickPageId == null) {
+                    if (!editingShortcuts && editingQuickPageId == null) {
                         storedQuickIds = latest.quickIds
                         peerPreferenceKey?.let { key -> preferences.edit().apply {
                             if (latest.quickIds == null) remove(key) else putString(key, encodeQuickIds(latest.quickIds))
@@ -707,15 +739,19 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                             putBoolean("pendingQuickV1_$key", false)
                         }.apply() }
                     }
-                    draftQuickIds = (if (editingQuickPageId == null) latest.quickIds else
-                        latest.pages.find { it.id == editingQuickPageId }?.quickIds)
-                        ?: availableKeys.take(QUICK_SLOT_LIMIT).map { it.identity }
                     editingQuick = false
                     layoutPreferenceKey?.let { preferences.edit().putString(it, latest.toJson()).apply() }
                     quickConflict = null
                 }) { Text("PC sürümünü yükle") }
             }, dismissButton = {
-                TextButton(onClick = { quickConflict = null }) { Text("Telefon tercihini koru") }
+                TextButton(onClick = {
+                    if (editingShortcuts && !shortcutSelectionChanged) {
+                        draftQuickIds = latest.shortcutIds ?: distinctKeys.map { it.identity }
+                        draftHideShortcutNames = latest.hideShortcutNames
+                    }
+                    shortcutEditBase = latest
+                    quickConflict = null
+                }) { Text("Değişikliklerime dön") }
             })
     }
 }
@@ -725,6 +761,9 @@ private fun DeckQuickEditor(
     hideShortcutNames: Boolean,
     onHideNamesChange: (Boolean) -> Unit,
     namesEditable: Boolean,
+    shortcutScreen: Boolean,
+    saving: Boolean,
+    canSave: Boolean,
     knownKeys: List<DeckKey>,
     authorised: List<DeckKey>,
     selectedIds: List<String>,
@@ -734,35 +773,40 @@ private fun DeckQuickEditor(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selected = selectedIds.mapNotNull { id -> knownKeys.firstOrNull { it.identity == id } }.distinctBy { it.identity }
+    val keysById = remember(knownKeys) { knownKeys.associateBy { it.identity } }
+    val selected = remember(selectedIds, keysById) { selectedIds.map { id ->
+        keysById[id] ?: DeckKey(id.substringAfter(':'), id, if (id.startsWith("tool:")) "folder" else "application", false)
+    } }
+    val canAdd = !saving && (shortcutScreen || selectedIds.size < QUICK_SLOT_LIMIT)
     val addedIds = selected.map { it.identity }.toSet()
     val addable = authorised.filterNot { it.identity in addedIds }
     val move: (String, Int) -> Unit = { id, direction ->
         val index = selectedIds.indexOf(id)
         val next = index + direction
-        if (index >= 0 && next in selectedIds.indices) {
+        if (!saving && index >= 0 && next in selectedIds.indices) {
             val changed = selectedIds.toMutableList()
             changed.add(next, changed.removeAt(index))
             onChange(changed)
         }
     }
-    val remove: (String) -> Unit = { id -> onChange(selectedIds.filterNot { it == id }) }
+    val remove: (String) -> Unit = { id -> if (!saving) onChange(selectedIds.filterNot { it == id }) }
     val add: (String) -> Unit = { id ->
-        if (selectedIds.size < QUICK_SLOT_LIMIT && id !in selectedIds) onChange(selectedIds + id)
+        if (canAdd && id !in selectedIds) onChange(selectedIds + id)
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("HIZLI ERİŞİMİ DÜZENLE", fontWeight = FontWeight.ExtraBold,
+                Text(if (shortcutScreen) "KISAYOLLAR EKRANINI DÜZENLE" else "HIZLI ERİŞİMİ DÜZENLE", fontWeight = FontWeight.ExtraBold,
                     style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${selected.size}/$QUICK_SLOT_LIMIT seçili · Oklarla sırala, + ile ekle",
+                Text(if (shortcutScreen) "${selected.size} seçili · Oklarla sırala, + ile ekle"
+                    else "${selected.size}/$QUICK_SLOT_LIMIT seçili · Oklarla sırala, + ile ekle",
                     fontSize = 10.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            TextButton(onClick = onReset, modifier = Modifier.heightIn(min = 48.dp),
+            TextButton(onClick = onReset, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 7.dp)) { Text("Varsayılan", fontSize = 11.sp) }
-            TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp),
+            TextButton(onClick = onCancel, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 7.dp)) { Text("Vazgeç", fontSize = 11.sp) }
-            Button(onClick = onSave, modifier = Modifier.heightIn(min = 48.dp),
+            Button(onClick = onSave, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 13.dp)) { Text("Kaydet", fontSize = 11.sp) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -774,7 +818,7 @@ private fun DeckQuickEditor(
             if (maxWidth >= 630.dp) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DeckSelectedEditorPanel(selected, move, remove, Modifier.weight(1.1f).fillMaxHeight())
-                    DeckAvailableEditorPanel(addable, selectedIds.size < QUICK_SLOT_LIMIT, add,
+                    DeckAvailableEditorPanel(addable, canAdd, add,
                         Modifier.weight(.9f).fillMaxHeight())
                 }
             } else {
@@ -787,7 +831,7 @@ private fun DeckQuickEditor(
                             label = { Text("Eklenecekler (${addable.size})") }, modifier = Modifier.heightIn(min = 48.dp))
                     }
                     if (showAvailable) {
-                        DeckAvailableEditorPanel(addable, selectedIds.size < QUICK_SLOT_LIMIT, add,
+                        DeckAvailableEditorPanel(addable, canAdd, add,
                             Modifier.weight(1f).fillMaxWidth())
                     } else {
                         DeckSelectedEditorPanel(selected, move, remove, Modifier.weight(1f).fillMaxWidth())
@@ -810,13 +854,12 @@ private fun DeckSelectedEditorPanel(
             SectionCaption("PANELDEKİLER", "SIRALA VEYA KALDIR", Modifier.fillMaxWidth().height(23.dp))
             if (selected.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Panelde hızlı tuş yok. Ekle bölümünden komut seç.", color = muted,
+                    Text("Henüz kısayol seçilmedi. Ekle bölümünden komut seç.", color = muted,
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    items(selected, key = { it.identity }) { key ->
-                        val index = selected.indexOfFirst { it.identity == key.identity }
+                    itemsIndexed(selected, key = { _, key -> key.identity }) { index, key ->
                         Row(Modifier.fillMaxWidth().heightIn(min = 54.dp)
                             .background(surfaceHigh, RoundedCornerShape(12.dp)).padding(start = 9.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically) {
@@ -861,7 +904,7 @@ private fun DeckAvailableEditorPanel(
             SectionCaption("EKLENEBİLİR", "${candidates.size} İZİNLİ EYLEM", Modifier.fillMaxWidth().height(23.dp))
             if (candidates.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Eklenebilecek başka izinli komut yok. Tüm komutlar Tuşlar sayfasında.",
+                    Text("Eklenebilecek başka kısayol yok.",
                         color = muted, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
             } else {

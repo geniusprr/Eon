@@ -95,17 +95,17 @@ function parseWidgets(value: unknown): DeckLayoutWidget[] {
   })
 }
 
-function parseQuickIds(value: unknown): string[] | null {
+function parseShortcutIds(value: unknown, limit = Infinity): string[] | null {
   if (value === null) return null
-  if (!Array.isArray(value) || value.length > 6) throw new DeckLayoutValidationError()
-  const ids: string[] = []
+  if (!Array.isArray(value) || value.length > limit) throw new DeckLayoutValidationError()
+  const ids = new Set<string>()
   for (const raw of value) {
     if (typeof raw !== 'string' ||
         !/^(?:tool:(?:explorer|terminal|tasks|settings)|action:[a-zA-Z0-9-]{1,90})$/.test(raw) ||
-        ids.includes(raw)) throw new DeckLayoutValidationError()
-    ids.push(raw)
+        ids.has(raw)) throw new DeckLayoutValidationError()
+    ids.add(raw)
   }
-  return ids
+  return [...ids]
 }
 
 function parsePages(value: unknown): DeckPage[] {
@@ -118,7 +118,7 @@ function parsePages(value: unknown): DeckPage[] {
         ['panel', 'keys'].includes(item.id) || seen.has(item.id) ||
         typeof item.name !== 'string' || !item.name.trim() || item.name.length > 80) throw new DeckLayoutValidationError()
     seen.add(item.id)
-    return { id: item.id, name: item.name.trim(), widgets: parseWidgets(item.widgets), quickIds: parseQuickIds(item.quickIds) }
+    return { id: item.id, name: item.name.trim(), widgets: parseWidgets(item.widgets), quickIds: parseShortcutIds(item.quickIds, 6) }
   })
 }
 
@@ -131,22 +131,24 @@ function byteLimit(value: unknown): void {
 function parseSetInput(raw: unknown): DeckLayoutSetInput {
   byteLimit(raw)
   const item = record(raw)
-  onlyKeys(item, ['baseRevision', 'widgets'], ['quickIds', 'pages', 'hideShortcutNames'])
+  onlyKeys(item, ['baseRevision', 'widgets'], ['quickIds', 'pages', 'hideShortcutNames', 'shortcutIds'])
   if (hasOwn(item, 'hideShortcutNames') && typeof item.hideShortcutNames !== 'boolean') throw new DeckLayoutValidationError()
   if (!safeInt(item.baseRevision) || item.baseRevision < 0) throw new DeckLayoutValidationError()
-  return { ...(hasOwn(item, 'hideShortcutNames') ? { hideShortcutNames: item.hideShortcutNames as boolean } : {}), ...(hasOwn(item, 'pages') ? { pages: parsePages(item.pages) } : {}), baseRevision: item.baseRevision, widgets: parseWidgets(item.widgets),
-    ...(hasOwn(item, 'quickIds') ? { quickIds: parseQuickIds(item.quickIds) } : {}) }
+  return { ...(hasOwn(item, 'shortcutIds') ? { shortcutIds: parseShortcutIds(item.shortcutIds) } : {}),
+    ...(hasOwn(item, 'hideShortcutNames') ? { hideShortcutNames: item.hideShortcutNames as boolean } : {}), ...(hasOwn(item, 'pages') ? { pages: parsePages(item.pages) } : {}), baseRevision: item.baseRevision, widgets: parseWidgets(item.widgets),
+    ...(hasOwn(item, 'quickIds') ? { quickIds: parseShortcutIds(item.quickIds, 6) } : {}) }
 }
 
 function parseStored(raw: unknown): DeckLayout {
   byteLimit(raw)
   const item = record(raw)
-  onlyKeys(item, ['version', 'revision', 'updatedAt', 'widgets'], ['quickIds', 'pages', 'hideShortcutNames'])
+  onlyKeys(item, ['version', 'revision', 'updatedAt', 'widgets'], ['quickIds', 'pages', 'hideShortcutNames', 'shortcutIds'])
   if (hasOwn(item, 'hideShortcutNames') && typeof item.hideShortcutNames !== 'boolean') throw new DeckLayoutValidationError()
   if (item.version !== 1 || !safeInt(item.revision) || item.revision < 0 ||
       !safeInt(item.updatedAt) || item.updatedAt < 0) throw new DeckLayoutValidationError()
-  return { ...(hasOwn(item, 'hideShortcutNames') ? { hideShortcutNames: item.hideShortcutNames as boolean } : {}), ...(hasOwn(item, 'pages') ? { pages: parsePages(item.pages) } : {}), version: 1, revision: item.revision, updatedAt: item.updatedAt, widgets: parseWidgets(item.widgets),
-    ...(hasOwn(item, 'quickIds') ? { quickIds: parseQuickIds(item.quickIds) } : {}) }
+  return { ...(hasOwn(item, 'shortcutIds') ? { shortcutIds: parseShortcutIds(item.shortcutIds) } : {}),
+    ...(hasOwn(item, 'hideShortcutNames') ? { hideShortcutNames: item.hideShortcutNames as boolean } : {}), ...(hasOwn(item, 'pages') ? { pages: parsePages(item.pages) } : {}), version: 1, revision: item.revision, updatedAt: item.updatedAt, widgets: parseWidgets(item.widgets),
+    ...(hasOwn(item, 'quickIds') ? { quickIds: parseShortcutIds(item.quickIds, 6) } : {}) }
 }
 
 /** Single PC authority for the Deck geometry; synchronous CAS keeps IPC and HTTP writes serialized. */
@@ -160,7 +162,7 @@ export class DeckLayoutStore {
   }
 
   get(): DeckLayout {
-    return { ...this.current, ...(this.current.pages ? { pages: structuredClone(this.current.pages) } : {}), widgets: this.current.widgets.map(widget => ({ ...widget })),
+    return { ...this.current, ...(this.current.shortcutIds ? { shortcutIds: this.current.shortcutIds.slice() } : {}), ...(this.current.pages ? { pages: structuredClone(this.current.pages) } : {}), widgets: this.current.widgets.map(widget => ({ ...widget })),
       ...(this.current.quickIds === undefined ? {} : { quickIds: this.current.quickIds?.slice() ?? null }) }
   }
 
@@ -168,7 +170,9 @@ export class DeckLayoutStore {
     const incoming = parseSetInput(value)
     if (incoming.baseRevision !== this.current.revision) throw new DeckLayoutConflictError(this.get())
     if (this.current.revision === Number.MAX_SAFE_INTEGER) throw new DeckLayoutValidationError('revision-exhausted')
+    const shortcutIds = incoming.shortcutIds === undefined ? this.current.shortcutIds : incoming.shortcutIds
     const updated: DeckLayout = {
+      ...(shortcutIds === undefined ? {} : { shortcutIds }),
       hideShortcutNames: incoming.hideShortcutNames ?? this.current.hideShortcutNames ?? false,
       ...(incoming.pages !== undefined ? { pages: incoming.pages } : this.current.pages ? { pages: this.current.pages } : {}),
       version: 1, revision: this.current.revision + 1, updatedAt: Date.now(), widgets: incoming.widgets,

@@ -149,3 +149,19 @@ test('shortcut label visibility persists, survives legacy writes and validates i
   }
   assert.equal(store.set({ baseRevision: 2, widgets: store.get().widgets, hideShortcutNames: false }).hideShortcutNames, false)
 }))
+
+test('the shortcut screen persists its own order and empty state without changing widget favourites', () => fixture(file => {
+  const store = new DeckLayoutStore(file)
+  const { widgets } = store.get()
+  const quickIds = ['tool:explorer']
+  const shortcutIds = ['tool:terminal', ...Array.from({ length: 16 }, (_, index) => `action:test-${index}`)]
+  const saved = store.set({ baseRevision: 0, widgets, quickIds, shortcutIds })
+  saved.shortcutIds?.reverse()
+  const restored = new DeckLayoutStore(file)
+  assert.deepEqual(restored.get().shortcutIds, shortcutIds)
+  assert.deepEqual(restored.set({ baseRevision: 1, widgets }).shortcutIds, shortcutIds)
+  assert.throws(() => restored.set({ baseRevision: 2, widgets, shortcutIds: ['tool:terminal', 'tool:terminal'] }), DeckLayoutValidationError)
+  assert.deepEqual(restored.set({ baseRevision: 2, widgets, shortcutIds: [] }).shortcutIds, [])
+  assert.deepEqual(restored.set({ baseRevision: 3, widgets, shortcutIds: null }).shortcutIds, null)
+  assert.deepEqual(restored.get().quickIds, quickIds)
+}))

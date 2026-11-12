@@ -18,6 +18,8 @@ const NONCE_RETENTION_MS = 90_000
 export type RemotePermission = PairedDevice['permissions'][number]
 
 interface UsbHandlers {
+  remoteDesktop?: (operation: string, body: unknown, device: PairedDevice, transport: string, response: ServerResponse) => void
+  remoteDisconnected?: (transport: string) => void
   deckLayoutGet?: () => unknown | Promise<unknown>
   deckLayoutSet?: (body: unknown) => unknown | Promise<unknown>
   controls?: (pathname: string, body: unknown, deviceId: string) => unknown | Promise<unknown>
@@ -103,6 +105,7 @@ export class UsbPairingServer {
   }
 
   detachUsb(serial: string) {
+    this.handlers.remoteDisconnected?.(`usb:${serial}`)
     const server = this.usbServers.get(serial)
     this.usbServers.delete(serial)
     this.approval.disconnect(serial)
@@ -142,6 +145,7 @@ export class UsbPairingServer {
   }
 
   async stopTailnet(): Promise<void> {
+    this.handlers.remoteDisconnected?.('tailnet')
     const server = this.tailnetServer
     this.tailnetServer = null
     this.tailnetName = null
@@ -179,6 +183,31 @@ export class UsbPairingServer {
     try { pathname = new URL(request.url || '/', 'http://localhost').pathname }
     catch { this.json(response, 400, { error: 'invalid-url' }); return }
     if (!pathname.startsWith('/v1/')) { this.json(response, 404, { error: 'not-found' }); return }
+    if (pathname.startsWith('/v1/remote-desktop/')) {
+      const operation = pathname.slice('/v1/remote-desktop/'.length)
+      if (!['status', 'request', 'stream', 'input', 'stop'].includes(operation) || !this.handlers.remoteDesktop) {
+        this.json(response, 404, { error: 'not-found' }); return
+      }
+      if ((!usbSerial && !viaTls) || (usbSerial && !this.usbServers.has(usbSerial)) || request.headers.origin !== undefined) {
+        this.json(response, 403, { error: 'transport-unavailable' }); return
+      }
+      if (method !== (operation === 'status' ? 'GET' : 'POST')) {
+        this.json(response, 405, { error: 'method-not-allowed' }); return
+      }
+      let body: Buffer
+      try { body = await this.readBody(request, 8192) }
+      catch { this.json(response, 413, { error: 'request-too-large' }); return }
+      if (response.destroyed || (usbSerial && !this.usbServers.has(usbSerial)) || (viaTls && !this.tailnetServer)) return
+      const device = this.authorize(request, method, pathname, body, null)
+      if (!device) { this.json(response, 401, { error: 'unauthorized' }); return }
+      try {
+        this.handlers.remoteDesktop(operation, body.length ? JSON.parse(body.toString('utf8')) : null,
+          device, usbSerial ? `usb:${usbSerial}` : 'tailnet', response)
+      } catch {
+        this.json(response, 400, { error: 'Geçersiz ekran paylaşımı isteği.' })
+      }
+      return
+    }
     if (pathname.startsWith('/v1/usb-approval/')) {
       if (!usbSerial || !this.usbServers.has(usbSerial) || request.headers.origin !== undefined) {
         this.json(response, 403, { error: 'usb-pairing-only' }); return
@@ -284,7 +313,7 @@ export class UsbPairingServer {
     }
   }
 
-  private authorize(request: IncomingMessage, method: string, pathname: string, body: Buffer, permission: RemotePermission): boolean {
+  private authorize(request: IncomingMessage, method: string, pathname: string, body: Buffer, permission: RemotePermission | null): PairedDevice | false {
     const id = request.headers['x-eon-device']
     const date = request.headers['x-eon-time']
     const nonce = request.headers['x-eon-nonce']
@@ -293,16 +322,19 @@ export class UsbPairingServer {
     if (!/^[a-zA-Z0-9_-]{8,90}$/.test(id) || !/^\d{13}$/.test(date) || !/^[a-f0-9]{32}$/i.test(nonce)) return false
     if (Math.abs(Date.now() - Number(date)) > MAX_CLOCK_SKEW_MS) return false
     const verified = this.credentials.resolve(id)
-    if (!verified || !verified.device.permissions.includes(permission)) return false
+    if (!verified || (permission && !verified.device.permissions.includes(permission))) return false
     if (!constantTimeHexEqual(sig, signedRequest(method, pathname, date, nonce, body, verified.secret))) return false
     const now = Date.now()
     const used = this.nonces.get(id) ?? new Map<string, number>()
-    for (const [key, seenAt] of used) if (now - seenAt > NONCE_RETENTION_MS) used.delete(key)
+    for (const [key, seenAt] of used) {
+      if (now - seenAt <= NONCE_RETENTION_MS) break
+      used.delete(key)
+    }
     if (used.has(nonce)) return false
     if (used.size >= 10000) return false
     used.set(nonce, now)
     this.nonces.set(id, used)
-    return true
+    return verified.device
   }
 
   private async readBody(request: IncomingMessage, maxBytes = MAX_REQUEST_BYTES): Promise<Buffer> {

@@ -140,7 +140,7 @@ private fun matchesFolder(note: EonLocalNote, paths: Map<String, String>, folder
 }
 
 @Composable
-fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>,
+fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>, bottomClearance: androidx.compose.ui.unit.Dp,
                  onNew: () -> Unit, onOpen: (EonLocalNote) -> Unit) {
     val context = LocalContext.current.applicationContext
     var query by rememberSaveable { mutableStateOf("") }
@@ -285,7 +285,7 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>,
                         }
                     } else LazyColumn(Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(9.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp)) {
+                        contentPadding = PaddingValues(bottom = bottomClearance + 24.dp)) {
                         items(shown, key = { it.id }) { note ->
                             VaultNoteRow(note, pathOf(note, paths)) { onOpen(note) }
                         }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowUpRight, CheckCircle2, CircleDot, LoaderCircle, Monitor, MonitorPlay, PictureInPicture2, PlugZap, Smartphone, Square } from 'lucide-react'
 import type { IpcChannel } from '../../shared/contracts'
 import type { PhoneScreenMode, PhoneScreenSlot, PhoneScreenStatus } from '../../shared/phone-screen'
+import './device-frame.css'
 import './phone-screen.css'
 
 export type Device = { serial: string; model: string | null; state: string; usb: boolean }
@@ -304,9 +305,8 @@ export function PhoneScreenSurface({ devices, compact = false, minimal = false }
         {!authorised.length && nativeAvailable && <p className="eon2-phone-info" role="status">Telefonu USB ile bağlayıp Android'de bu bilgisayara izin ver.</p>}
       </div>
       <div className="eon2-phone-preview">
-        <div className="eon2-phone-shell">
-          <div className="eon2-phone-shell-top" aria-hidden="true"><span/></div>
-          <div ref={screenRef} className="eon2-phone-viewport" aria-label="Canlı Android ekran alanı">
+        <div className={`eon2-phone-shell eon-device-frame ${previewOrientation === 'landscape' ? 'is-landscape' : ''}`}>
+          <div ref={screenRef} className="eon2-phone-viewport eon-device-frame-screen" aria-label="Canlı Android ekran alanı">
             <div className="eon2-phone-placeholder" aria-hidden="true">
               {status.state === 'starting' ? <LoaderCircle className="eon2-phone-spin" size={34}/>
                 : status.state === 'running' && mode !== 'embedded' ? <PictureInPicture2 size={34}/>
@@ -316,7 +316,6 @@ export function PhoneScreenSurface({ devices, compact = false, minimal = false }
               <small>{status.state === 'running' && mode !== 'embedded' ? 'Eon içinde görüntülemek için görünümü değiştir.' : status.state === 'running' ? 'Telefon ekranını fare ve klavyeyle kontrol edebilirsin.' : 'Cihazını seç ve ekranı aç.'}</small>
             </div>
           </div>
-          <div className="eon2-phone-shell-bottom" aria-hidden="true"><span/></div>
         </div>
         <div className="eon2-phone-preview-caption"><span className={status.state === 'running' ? 'is-live' : ''}/><span>{status.state === 'running' ? `${mode === 'embedded' ? 'Eon içinde' : mode === 'pip' ? 'PiP' : 'Harici pencere'} · scrcpy` : 'USB üzerinden güvenli ekran kontrolü'}</span></div>
       </div>

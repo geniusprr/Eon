@@ -70,16 +70,19 @@ export function validDeckWidgets(items: DeckTile[]): boolean {
   return true
 }
 
+function validShortcutIds(value: unknown, limit = Infinity): boolean {
+  return value === undefined || value === null || (Array.isArray(value) && value.length <= limit &&
+    new Set(value).size === value.length &&
+    value.every(id => typeof id === 'string' && /^(?:tool:(?:explorer|terminal|tasks|settings)|action:[a-zA-Z0-9-]{1,90})$/.test(id)))
+}
+
 export function validateDeckLayout(value: unknown): DeckLayout | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const data = value as Partial<DeckLayout>
   if (data.version !== 1 || !Number.isSafeInteger(data.revision) || (data.revision ?? -1) < 0 ||
     !Number.isSafeInteger(data.updatedAt) || (data.updatedAt ?? -1) < 0 ||
     !Array.isArray(data.widgets) || !validDeckWidgets(data.widgets)) return null
-  if (data.quickIds !== undefined && data.quickIds !== null &&
-    (!Array.isArray(data.quickIds) || data.quickIds.length > 6 ||
-      new Set(data.quickIds).size !== data.quickIds.length ||
-      data.quickIds.some(id => typeof id !== 'string' || !/^(?:tool:(?:explorer|terminal|tasks|settings)|action:[a-zA-Z0-9-]{1,90})$/.test(id)))) return null
+  if (!validShortcutIds(data.quickIds, 6) || !validShortcutIds(data.shortcutIds)) return null
   if (data.hideShortcutNames !== undefined && typeof data.hideShortcutNames !== 'boolean') return null
   let pages: DeckPage[] | undefined
   if (data.pages !== undefined) {
@@ -95,7 +98,8 @@ export function validateDeckLayout(value: unknown): DeckLayout | null {
       pages.push(structuredClone(page))
     }
   }
-  return { ...(data.hideShortcutNames === undefined ? {} : { hideShortcutNames: data.hideShortcutNames }), ...(pages ? { pages } : {}), version: 1, revision: data.revision!, updatedAt: data.updatedAt!,
+  return { ...(data.shortcutIds === undefined ? {} : { shortcutIds: data.shortcutIds?.slice() ?? null }),
+    ...(data.hideShortcutNames === undefined ? {} : { hideShortcutNames: data.hideShortcutNames }), ...(pages ? { pages } : {}), version: 1, revision: data.revision!, updatedAt: data.updatedAt!,
     widgets: data.widgets.map(item => ({ ...item })),
     ...(data.quickIds === undefined ? {} : { quickIds: data.quickIds?.slice() ?? null }) }
 }

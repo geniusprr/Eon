@@ -208,10 +208,11 @@ export class WindowsInputInjector {
   }
 
   releaseAll() {
-    for (const key of this.heldKeys) this.sendKeyboard(key, 0, KEYEVENTF_KEYUP)
+    for (const key of this.heldKeys) {
+      if (this.sendKeyboard(key, 0, KEYEVENTF_KEYUP)) this.heldKeys.delete(key)
+    }
     for (const button of this.heldButtons) this.button(button, false)
-    this.heldKeys.clear()
-    this.heldButtons.clear()
+    return this.heldKeys.size === 0 && this.heldButtons.size === 0
   }
 
   private sendMouse(flags: number, mouseData: number, dx = 0, dy = 0) {

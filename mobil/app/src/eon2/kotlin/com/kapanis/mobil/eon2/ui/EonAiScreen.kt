@@ -88,6 +88,7 @@ internal fun EonAiScreen(
     state: EonAiChatState,
     scope: CoroutineScope,
     modifier: Modifier = Modifier,
+    bottomClearance: androidx.compose.ui.unit.Dp,
     onConnect: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -212,7 +213,7 @@ internal fun EonAiScreen(
     }
 
     Column(
-        modifier.fillMaxSize().imePadding().padding(horizontal = 18.dp).padding(top = 12.dp, bottom = 8.dp),
+        modifier.fillMaxSize().imePadding().padding(horizontal = 18.dp).padding(top = 12.dp, bottom = bottomClearance + 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

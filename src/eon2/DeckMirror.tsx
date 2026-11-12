@@ -6,7 +6,7 @@ import type { DeckMediaSample } from '../../shared/eon-deck-telemetry'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   Grip, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Command,
-  ChartNoAxesColumn, ExternalLink, Folder, LayoutTemplate, LockKeyhole, Monitor,
+  ChartNoAxesColumn, ExternalLink, Folder, LayoutTemplate, LockKeyhole, Smartphone, SlidersHorizontal,
   Plus, Power, RotateCcw, Save, Settings2, Square, Terminal, TimerOff, X,
 } from 'lucide-react'
 import type { IpcChannel } from '../../shared/contracts'
@@ -15,6 +15,7 @@ import {
   clampDeckTile, deckPreset, defaultDeckLayout, patchDeckTile, moveDeckTile, resizeDeckTile, validateDeckLayout,
   type DeckPage, type DeckLayout, type DeckTile, type DeckTileId, type DeckPreset, type DeckEdge,
 } from './deckMirrorLayout'
+import './device-frame.css'
 import './deck-mirror.css'
 
 type Section = 'dashboard' | 'notes' | 'devices' | 'automations' | 'transfers' | 'settings'
@@ -45,6 +46,7 @@ const toolIcons: Record<string, typeof Command> = {
   folder: Folder, file: Folder, terminal: Terminal, command: Terminal, chart: ChartNoAxesColumn,
   settings: Settings2, application: ExternalLink, lock: LockKeyhole, shutdown: Power, restart: RotateCcw, cancel: TimerOff,
 }
+const shortcutIdentity = (key: DeckKey) => `${key.tool ? 'tool' : 'action'}:${key.id}`
 const keyTones: Record<string, string> = {
   folder: 'amber', file: 'amber', terminal: 'violet', command: 'violet', chart: 'mint', settings: 'muted',
   lock: 'coral', shutdown: 'coral', restart: 'coral', cancel: 'coral',
@@ -224,20 +226,23 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
   const pages = serverLayout.pages ?? []
   const currentPage = pages.find(page => page.id === selectedPage)
   const pageWidgets = currentPage?.widgets ?? serverLayout.widgets
-  const pageQuickIds = currentPage ? currentPage.quickIds : serverLayout.quickIds ?? null
-  const isKeys = selectedPage.startsWith('keys:')
-  const allKeys: DeckKey[] = [
+  const isKeys = selectedPage === 'keys'
+  const pageQuickIds = isKeys ? serverLayout.shortcutIds ?? null
+    : currentPage ? currentPage.quickIds : serverLayout.quickIds ?? null
+  const allKeysById = new Map<string, DeckKey>([
     ...(deck?.tools ?? []).map(tool => ({ id: tool.id, name: tool.name, kind: tool.icon, available: true, tool: true })),
     ...(deck?.actions ?? []),
-  ]
-  const keysPerPage = denseKeys ? 15 : 12
-  const keyPageCount = Math.max(1, Math.ceil(allKeys.length / keysPerPage))
-  const keyPage = isKeys ? Math.min(Number(selectedPage.slice(5)), keyPageCount - 1) : 0
-  const pageKeys = allKeys.slice(keyPage * keysPerPage, (keyPage + 1) * keysPerPage)
+  ].map(key => [shortcutIdentity(key), key]))
+  const allKeys = [...allKeysById.values()]
+  const pageKeys = pageQuickIds === null ? allKeys : pageQuickIds.flatMap(id => {
+    const key = allKeysById.get(id)
+    return key ? [key] : []
+  })
+  const screenIds = ['panel', ...pages.map(page => page.id), 'keys']
+  const screenIndex = screenIds.indexOf(selectedPage)
   useEffect(() => {
-    if (isKeys && deck && selectedPage !== `keys:${keyPage}`) setSelectedPage(`keys:${keyPage}`)
-    else if (!isKeys && selectedPage !== 'panel' && !pages.some(page => page.id === selectedPage) && !editMode) setSelectedPage('panel')
-  }, [deck, pages, selectedPage, editMode, isKeys, keyPage])
+    if (!isKeys && selectedPage !== 'panel' && !pages.some(page => page.id === selectedPage) && !editMode) setSelectedPage('panel')
+  }, [pages, selectedPage, editMode, isKeys])
   const activeTiles = draft ?? pageWidgets
   const activeQuickIds = draft ? draftQuickIds : pageQuickIds
   const hideShortcutNames = draft ? draftHideShortcutNames : serverLayout.hideShortcutNames ?? false
@@ -266,7 +271,9 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
     draftRef.current = pageWidgets.map(tile => ({ ...tile }))
     setDraftQuickIds(pageQuickIds?.slice() ?? null)
     setDraftHideShortcutNames(serverLayout.hideShortcutNames ?? false)
-    setMessage('Kartları sürükle veya köşelerinden boyutlandır. Değişiklikleri kaydettiğinde telefonda da uygulanır.')
+    if (isKeys) setEditingQuick(true)
+    setMessage(isKeys ? 'Kısayolları seç ve sırala. Kaydedince bağlı telefona da uygulanır.'
+      : 'Kartları sürükle veya köşelerinden boyutlandır. Değişiklikleri kaydettiğinde telefonda da uygulanır.')
   }
   const closeEditor = () => {
     if (changed && !window.confirm('Kaydedilmemiş Deck değişikliklerini iptal edelim mi?')) return
@@ -283,8 +290,10 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
       const quickChanged = JSON.stringify(draftQuickIds) !== JSON.stringify(editorBase.current?.quickIds ?? null)
       const namesChanged = draftHideShortcutNames !== (editorBase.current?.hideShortcutNames ?? false)
       const otherChanges = { ...(namesChanged ? { hideShortcutNames: draftHideShortcutNames } : {}) }
-      if (selectedPage !== 'panel' && !source.pages?.some(page => page.id === selectedPage)) throw new Error('Bu ekran başka cihazda silinmiş. Son düzeni al.')
-      const response = await desktopInvoke<unknown>('eon2:deck:layout:set', selectedPage === 'panel'
+      if (!isKeys && selectedPage !== 'panel' && !source.pages?.some(page => page.id === selectedPage)) throw new Error('Bu ekran başka cihazda silinmiş. Son düzeni al.')
+      const response = await desktopInvoke<unknown>('eon2:deck:layout:set', isKeys
+        ? { baseRevision: revision, widgets: source.widgets, ...otherChanges, ...(quickChanged ? { shortcutIds: draftQuickIds } : {}) }
+        : selectedPage === 'panel'
         ? { baseRevision: revision, widgets, ...otherChanges, ...(quickChanged ? { quickIds: draftQuickIds } : {}) }
         : { baseRevision: revision, widgets: source.widgets, ...otherChanges,
           pages: source.pages?.map(page => page.id === selectedPage ? { ...page, widgets,
@@ -431,20 +440,20 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
       <div className="eon-mirror-toolbar">
         <div className="eon-mirror-sync" role="status"><span className={layoutReady && !syncError ? 'is-connected' : ''}/>
           {syncError ? 'Senkronizasyon hatası' : layoutReady ? `Senkronize · v${serverLayout.revision}` : 'Bağlantı bekleniyor'}</div>
-          <details ref={menuRef} className="eon-mirror-presets"><summary><LayoutTemplate size={16}/> Hazır düzen <ChevronDown size={15}/></summary>
+          {!isKeys && <details ref={menuRef} className="eon-mirror-presets"><summary><LayoutTemplate size={16}/> Hazır düzen <ChevronDown size={15}/></summary>
             <div className="eon-mirror-presets-menu">{DECK_PRESETS.map(item => <button type="button" key={item.id} onClick={() => preset(item.id)}>
-              <strong>{item.name}</strong><span>{item.info}</span></button>)}</div></details>
+              <strong>{item.name}</strong><span>{item.info}</span></button>)}</div></details>}
           <button type="button" className="eon-mirror-button is-quiet" onClick={closeEditor} disabled={saving}><X size={16}/> Vazgeç</button>
           <button type="button" className="eon-mirror-button is-primary" onClick={() => void save()} disabled={saving || !layoutReady || !changed}><Save size={16}/>{saving ? 'Kaydediliyor' : 'Kaydet'}</button>
       </div>
     </div>}
     <div className="eon-mirror-pages" aria-label="Deck ekranları">
-      <select aria-label="Kontrol edilecek ekran" value={isKeys ? `keys:${keyPage}` : selectedPage} disabled={editMode || saving || naming !== null} onChange={event => setSelectedPage(event.target.value)}>
+      <select aria-label="Kontrol edilecek ekran" value={selectedPage} disabled={editMode || saving || naming !== null} onChange={event => setSelectedPage(event.target.value)}>
         <option value="panel">Deck</option>
         {pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
-        {Array.from({ length: keyPageCount }, (_, index) => <option key={index} value={`keys:${index}`}>Tuşlar {index + 1}</option>)}
+        <option value="keys">Kısayollar</option>
       </select>
-      <button type="button" disabled={!layoutReady || editMode || saving || isKeys || naming !== null} onClick={openEditor}><Grip size={16}/> Düzeni düzenle</button>
+      <button type="button" disabled={!layoutReady || editMode || saving || naming !== null || (isKeys && !deck)} onClick={openEditor}><Grip size={16}/> {isKeys ? 'Kısayolları düzenle' : 'Düzeni düzenle'}</button>
       <button type="button" disabled={!layoutReady || editMode || saving || naming !== null} onClick={() => addPage()}><Plus size={16}/> Ekran ekle</button>
       <button type="button" disabled={!layoutReady || editMode || saving || isKeys || naming !== null} onClick={() => addPage(true)}>Çoğalt</button>
       {currentPage && <>
@@ -470,25 +479,27 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
         acceptLayout(conflict); editorBaseRevision.current = conflict.revision
         const page = conflict.pages?.find(page => page.id === selectedPage)
         const widgets = page?.widgets ?? conflict.widgets
-        if (selectedPage !== 'panel' && !page) { setSelectedPage('panel'); setEditMode(false); setDraft(null); draftRef.current = null; editorBaseRevision.current = null; editorBase.current = null; setConflict(null); return }
-        editorBase.current = { widgets: widgets.map(tile => ({ ...tile })), quickIds: (page ? page.quickIds : conflict.quickIds)?.slice() ?? null,
+        if (!isKeys && selectedPage !== 'panel' && !page) { setSelectedPage('panel'); setEditMode(false); setDraft(null); draftRef.current = null; editorBaseRevision.current = null; editorBase.current = null; setConflict(null); return }
+        const ids = (isKeys ? conflict.shortcutIds : page ? page.quickIds : conflict.quickIds)?.slice() ?? null
+        editorBase.current = { widgets: widgets.map(tile => ({ ...tile })), quickIds: ids,
           hideShortcutNames: conflict.hideShortcutNames ?? false }
         setDraft(widgets.map(tile => ({ ...tile }))); draftRef.current = widgets.map(tile => ({ ...tile }))
-        setDraftHideShortcutNames(conflict.hideShortcutNames ?? false); setDraftQuickIds((page ? page.quickIds : conflict.quickIds)?.slice() ?? null); setConflict(null)
+        setDraftHideShortcutNames(conflict.hideShortcutNames ?? false); setDraftQuickIds(ids); setConflict(null)
       }}>Son düzeni al</button>
       <button type="button" onClick={() => void save(true)}>Benim düzenimi uygula</button>
     </div>}
     <div className="eon-mirror-stage">
-      <div className="eon-mirror-phone">
-        <div className={`eon-mirror-display ${isKeys ? 'is-key-page' : ''}`}>
-          {isKeys ? <div className={`eon-mirror-all-keys ${denseKeys ? 'is-dense' : ''}`} aria-label={`Tuşlar ${keyPage + 1}`}>
-            {pageKeys.map(key => <MirrorShortcut key={`${key.tool ? 'tool' : 'action'}:${key.id}`} item={key} busy={busy}
+      <div className="eon-mirror-phone eon-device-frame is-landscape">
+        <div className={`eon-mirror-display eon-device-frame-screen ${isKeys ? 'is-key-page' : ''}`}>
+          {isKeys ? <div className={`eon-mirror-all-keys ${denseKeys ? 'is-dense' : ''}`} aria-label="Kısayollar" role="region" tabIndex={editingQuick ? -1 : 0}
+            style={editingQuick ? { visibility: 'hidden' } : undefined}>
+            {pageKeys.map(key => <MirrorShortcut key={shortcutIdentity(key)} item={key} busy={busy}
               phoneTile hideName={hideShortcutNames} onClick={() => {
                 if (key.remoteEnabled === false) setMessage(`PC’de Kısayollar’dan “${key.name}” için telefon erişimini aç.`)
                 else if (!key.available) setMessage('Bu tuş kullanılamıyor.')
                 else runKey(key)
               }}/>)}
-            {!pageKeys.length && <div className="eon-mirror-keys-notice">{deck ? 'Henüz kısayol yok' : 'Komutlar yükleniyor…'}</div>}
+            {!pageKeys.length && <div className="eon-mirror-keys-notice">{deck ? 'Bu ekranda kısayol yok. Düzenleyerek ekleyebilirsin.' : 'Komutlar yükleniyor…'}</div>}
           </div> : <div className={`eon-mirror-grid ${editMode ? 'is-editing' : ''}`} ref={gridRef}
             onContextMenu={event => {
               event.preventDefault()
@@ -520,69 +531,75 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
             {editMode && preview && <div className={`eon-mirror-ghost ${!(gesture.current?.mode === 'move' ? moveDeckTile(activeTiles, preview) : patchDeckTile(activeTiles, preview)) ? 'is-invalid' : ''}`}
               aria-hidden="true" style={{ gridColumn: `${preview.x + 1} / span ${preview.w}`, gridRow: `${preview.y + 1} / span ${preview.h}` }}/>}
           </div>}
-          {editingQuick && <div className="eon-mirror-quick-overlay" role="dialog" aria-modal="true" aria-label="Deck hızlı kısayollarını düzenle">
-            <header><div><strong>Hızlı erişim tuşları</strong><small>Telefonda ve bilgisayarda aynı altı kısayol görüntülenir.</small></div>
-              <button type="button" aria-label="Kısayol düzenleyiciyi kapat" onClick={() => setEditingQuick(false)}><X size={16}/></button></header>
+          {editingQuick && <div className="eon-mirror-quick-overlay" role="dialog" aria-modal="true" aria-label={isKeys ? "Kısayollar ekranını düzenle" : "Deck hızlı kısayollarını düzenle"}>
+            <header><div><strong>{isKeys ? 'Kısayollar ekranı' : 'Hızlı erişim tuşları'}</strong>
+              <small>{isKeys ? 'Gösterilecek kısayolları seç ve sırala.' : 'Telefonda ve bilgisayarda aynı altı kısayol görüntülenir.'}</small></div>
+              <button type="button" aria-label="Kısayol düzenleyiciyi kapat" disabled={saving} onClick={isKeys ? closeEditor : () => setEditingQuick(false)}><X size={16}/></button></header>
             <label className="eon-mirror-name-toggle"><input type="checkbox" checked={draftHideShortcutNames} disabled={saving} onChange={event => setDraftHideShortcutNames(event.target.checked)}/> Kısayol adlarını gizle (tüm ekranlar)</label>
             <div className="eon-mirror-quick-editor">
               {(() => {
-                const keys: Array<DeckKey & { tool?: boolean; identity: string }> = [
-                  ...(deck?.tools ?? []).map(item => ({ id:item.id, name:item.name, kind:item.icon, available:true, tool:true, identity:`tool:${item.id}` })),
-                  ...(deck?.actions ?? []).map(item => ({...item, identity:`action:${item.id}` })),
-                ]
-                const ids = draftQuickIds ?? keys.filter(item => item.available).slice(0, 6).map(item => item.identity)
+                const keys = allKeys.map(item => ({ ...item, identity: shortcutIdentity(item) }))
+                const ids = draftQuickIds ?? (isKeys ? keys : keys.filter(item => item.available).slice(0, 6)).map(item => item.identity)
+                const selectedIds = new Set(ids)
                 const moveId = (id: string, delta: number) => {
                   const from = ids.indexOf(id); const to = from + delta
                   if (from < 0 || to < 0 || to >= ids.length) return
                   const next = [...ids]; next.splice(to, 0, next.splice(from, 1)[0]); setDraftQuickIds(next)
                 }
                 return <>
-                  <div className="eon-mirror-quick-selected"><b>SEÇİLİ TUŞLAR ({ids.length}/6)</b>
+                  <div className="eon-mirror-quick-selected"><b>SEÇİLİ TUŞLAR ({ids.length}{isKeys ? '' : '/6'})</b>
                     {ids.map((identity, index) => {
-                      const key = keys.find(item => item.identity === identity)
+                      const key = allKeysById.get(identity)
                       return <div key={identity}><span>{key?.name || identity}</span>
-                        <button type="button" aria-label="Yukarı taşı" disabled={index === 0} onClick={() => moveId(identity, -1)}><ArrowUp size={14}/></button>
-                        <button type="button" aria-label="Aşağı taşı" disabled={index === ids.length - 1} onClick={() => moveId(identity, 1)}><ArrowDown size={14}/></button>
-                        <button type="button" aria-label="Kaldır" onClick={() => setDraftQuickIds(ids.filter(id => id !== identity))}><X size={14}/></button>
+                        <button type="button" aria-label="Yukarı taşı" disabled={saving || index === 0} onClick={() => moveId(identity, -1)}><ArrowUp size={14}/></button>
+                        <button type="button" aria-label="Aşağı taşı" disabled={saving || index === ids.length - 1} onClick={() => moveId(identity, 1)}><ArrowDown size={14}/></button>
+                        <button type="button" aria-label="Kaldır" disabled={saving} onClick={() => setDraftQuickIds(ids.filter(id => id !== identity))}><X size={14}/></button>
                       </div>
                     })}
                     {!ids.length && <span className="eon-mirror-quick-empty">Hiç kısayol seçili değil.</span>}
                   </div>
                   <div className="eon-mirror-quick-available"><b>EKLENEBİLİR</b>
-                    {keys.filter(item => item.available && !ids.includes(item.identity)).map(key =>
-                      <button type="button" key={key.identity} disabled={ids.length >= 6}
+                    {keys.filter(item => (isKeys || item.available) && !selectedIds.has(item.identity)).map(key =>
+                      <button type="button" key={key.identity} disabled={saving || (!isKeys && ids.length >= 6)}
                         onClick={() => setDraftQuickIds([...ids, key.identity])}><Plus size={14}/>{key.name}</button>)}
                   </div>
                 </>
               })()}
             </div>
-            <footer><button type="button" onClick={() => setDraftQuickIds(null)}>Varsayılan altı tuş</button>
-              <button type="button" className="is-done" onClick={() => { setEditingQuick(false); setMessage('Kısayollar hazır. Telefona göndermek için Kaydet.') }}>Tamam</button></footer>
+            <footer><button type="button" disabled={saving} onClick={() => setDraftQuickIds(null)}>
+              {isKeys ? 'Varsayılan sıra' : 'Varsayılan altı tuş'}</button>
+              {isKeys
+                ? <button type="button" className="is-done" disabled={saving || !changed || !!conflict} onClick={() => void save()}>Kaydet</button>
+                : <button type="button" className="is-done" onClick={() => { setEditingQuick(false); setMessage('Kısayollar hazır. Telefona göndermek için Kaydet.') }}>Tamam</button>}
+            </footer>
           </div>}
-          {isKeys ? <div className="eon-mirror-foot eon-mirror-keys-foot">
+          <div className="eon-mirror-foot">
+            <button type="button" className="eon-mirror-phone-link" title="Telefon ekranını aç" aria-label="Telefon ekranını aç"
+              onClick={() => navigate('devices')}><img src="./eon.svg" alt=""/><Smartphone size={12}/></button>
             <div className="eon-mirror-foot-status" role="status">
               <span className={connected ? 'is-connected' : ''}/>
               <span>{message || (connected ? snapshot?.hostname || 'Bağlı' : 'Çevrimdışı')}</span>
             </div>
-            <nav className="eon-mirror-key-pages" aria-label="Deck sayfaları">
-              <button type="button" onClick={() => setSelectedPage('panel')}>Deck</button>
-              {pages.length + keyPageCount < 4 && pages.map(page => <button type="button" key={page.id}
-                onClick={() => setSelectedPage(page.id)}>{page.name}</button>)}
-              {Array.from({ length: keyPageCount }, (_, index) => index)
-                .filter(index => keyPageCount <= 3 || Math.abs(index - keyPage) <= 1)
-                .map(index => <button type="button" key={index} aria-current={index === keyPage ? 'page' : undefined}
-                  onClick={() => setSelectedPage(`keys:${index}`)}>Tuşlar {index + 1}</button>)}
-            </nav>
-            <button type="button" aria-label={denseKeys ? '4×3 tuş dizilimine geç' : '5×3 tuş dizilimine geç'}
-              onClick={() => setDenseKeys(!denseKeys)}>{denseKeys ? '5×3' : '4×3'}</button>
-          </div> : <div className="eon-mirror-foot">
-            <div className="eon-mirror-foot-status"><span className={connected ? 'is-connected' : ''}/><span>{message || (connected ? 'USB bağlantısı etkin' : 'Telefona bağlanmak için Cihazlar bölümünü aç')}</span></div>
-            <div className="eon-mirror-foot-pages"><span className="is-current">{currentPage?.name ?? 'Deck'}</span><span>{pages.length + 1 + keyPageCount} ekran</span></div>
-            <div className="eon-mirror-foot-tools">
-              <button type="button" title="Notları aç" aria-label="Notlar" onClick={() => navigate('notes')}><Monitor size={15}/></button>
-              <button type="button" title="Ayarları aç" aria-label="Ayarlar" onClick={() => navigate('settings')}><Settings2 size={15}/></button>
-            </div>
-          </div>}
+            {!editMode && <nav className="eon-mirror-key-pages" aria-label="Deck sekme çubuğu">
+              <button type="button" aria-label="Önceki ekran" disabled={saving || naming !== null || screenIndex <= 0}
+                onClick={() => setSelectedPage(screenIds[screenIndex - 1])}><ArrowLeft size={15}/></button>
+              <select aria-label="Deck ekranına geç" value={selectedPage} disabled={saving || naming !== null}
+                onChange={event => setSelectedPage(event.target.value)}>
+                <option value="panel">Deck</option>
+                {pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
+                <option value="keys">Kısayollar</option>
+              </select>
+              <button type="button" aria-label="Sonraki ekran" disabled={saving || naming !== null || screenIndex >= screenIds.length - 1}
+                onClick={() => setSelectedPage(screenIds[screenIndex + 1])}><ArrowRight size={15}/></button>
+              {isKeys && <button type="button" aria-label={denseKeys ? '4 sütunlu dizilime geç' : '5 sütunlu dizilime geç'}
+                onClick={() => setDenseKeys(!denseKeys)}>{denseKeys ? '5 sütun' : '4 sütun'}</button>}
+              {!isKeys && <button type="button" aria-label="Panel bileşenlerini düzenle" disabled={!layoutReady || saving || naming !== null}
+                onClick={openEditor}><Grip size={15}/></button>}
+              <button type="button" aria-label={isKeys ? 'Kısayollar ekranını düzenle' : 'Altı hızlı eylemi seç ve sırala'}
+                disabled={!layoutReady || saving || naming !== null || (isKeys && !deck)}
+                onClick={() => { openEditor(); setEditingQuick(true) }}><SlidersHorizontal size={15}/></button>
+            </nav>}
+          </div>
         </div>
       </div>
     </div>

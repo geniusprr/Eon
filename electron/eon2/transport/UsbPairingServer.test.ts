@@ -221,7 +221,8 @@ test('authenticated Deck layout GET/POST enforces scoped grants, payload cap and
     permissions = ['actions.execute']
     assert.equal((await signed('GET')).status, 401)
     const changed = initial.widgets.map(widget => ({ ...widget, visible: widget.id !== 'gpu' }))
-    const valid = { baseRevision: 0, widgets: changed }
+    const shortcutIds = ['tool:settings', 'tool:terminal', 'action:existing-command']
+    const valid = { baseRevision: 0, widgets: changed, shortcutIds }
     const update = await signed('POST', valid)
     assert.equal(update.status, 200)
     assert.equal((await update.json() as { revision: number }).revision, 1)
@@ -232,7 +233,9 @@ test('authenticated Deck layout GET/POST enforces scoped grants, payload cap and
     assert.equal((await signed('POST', { ...valid, baseRevision: 1, padding: 'x'.repeat(8 * 1024 * 1024) })).status, 413)
     assert.equal(layout.get().revision, 1)
     permissions = ['system.read']
-    assert.equal((await signed('GET')).status, 200)
+    const loaded = await signed('GET')
+    assert.equal(loaded.status, 200)
+    assert.deepEqual((await loaded.json() as ReturnType<DeckLayoutStore['get']>).shortcutIds, shortcutIds)
     revoked = true
     assert.equal((await signed('GET')).status, 401)
     assert.equal((await signed('POST', { baseRevision: 1, widgets: changed })).status, 401)

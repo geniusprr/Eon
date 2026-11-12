@@ -1,5 +1,8 @@
 package com.kapanis.mobil.eon2.ui
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.OpenableColumns
@@ -17,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeMute
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -41,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.kapanis.mobil.eon2.network.EonUsbClient
+import com.kapanis.mobil.eon2.network.ReceivedDownload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -51,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.util.Locale
 import java.util.UUID
 
@@ -78,6 +84,7 @@ private data class PhoneAction(
 private data class PhoneFile(
     val id: String, val name: String, val size: Long, val transferred: Long,
     val direction: String, val state: String,
+    val download: ReceivedDownload? = null,
 ) {
     companion object {
         fun read(json: JSONObject) = PhoneFile(
@@ -85,7 +92,6 @@ private data class PhoneFile(
             json.optLong("transferred"), json.getString("direction"), json.getString("state"),
         )
     }
-
 }
 
 private data class PhoneTimer(val action: String, val shortcutId: String, val deadline: Long?)
@@ -111,7 +117,9 @@ private data class ActionDraft(
 )
 
 @Composable
-fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifier = Modifier, onBack: () -> Unit) {
+internal fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifier = Modifier,
+    bottomClearance: androidx.compose.ui.unit.Dp = 0.dp, receivedFiles: List<ReceivedDownload> = emptyList(),
+    onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -256,13 +264,18 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             (filter == "pending" && (!action.remoteEnabled || (deck != null && !actionAllowed(action, deck))))) &&
             (search.isBlank() || action.name.contains(search, true) || actionKindLabel(action.kind).contains(search, true))
     }
-    val filteredFiles = files.filter { file ->
+    val transferHistory = remember(files, receivedFiles) {
+        val savedIds = receivedFiles.mapTo(mutableSetOf()) { it.id }
+        receivedFiles.map { PhoneFile(it.id, it.name, it.size, it.size, "send", "completed", it) } +
+            files.asReversed().filterNot { it.id in savedIds }
+    }
+    val filteredFiles = transferHistory.filter { file ->
         (filter == "all" || (filter == "incoming" && file.direction == "send") ||
             (filter == "outgoing" && file.direction == "receive")) &&
             (search.isBlank() || file.name.contains(search, true))
     }
 
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 28.dp),
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = bottomClearance + 28.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)) {
         item(key = "heading") {
             Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -273,8 +286,10 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(if (filesOnly) "YEREL DOSYA AKTARIMI" else "PC CONTROL DECK", style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
+                        if (!filesOnly) {
+                            Text("PC CONTROL DECK", style = MaterialTheme.typography.labelSmall,
+                                letterSpacing = 1.5.sp, color = MaterialTheme.colorScheme.primary)
+                        }
                         Text(if (filesOnly) "Local Send" else "PC kısayolları",
                             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     }
@@ -313,7 +328,10 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
             }
         }
         if (notice != null || loadError != null) item(key = "feedback") {
-            ControlNotice(notice, loadError, onRetry = { refreshNow() })
+            val error = if (filesOnly && loadError != null && receivedFiles.isNotEmpty()) {
+                "PC’deki aktarım listesi alınamadı. Telefona kaydedilen dosyalar aşağıda."
+            } else loadError
+            ControlNotice(notice, error, onRetry = { refreshNow() })
         }
         if (!loaded && loadError == null) item(key = "loading") {
             Row(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalArrangement = Arrangement.Center,
@@ -392,13 +410,13 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                 }
             }
         }
-        if (loaded) item(key = "filters") {
+        if (loaded || receivedFiles.isNotEmpty()) item(key = "filters") {
             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (filesOnly) "Aktarım listesi" else "Kısayollarım",
                         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(if (filesOnly) "${files.size} dosya" else "${actions.size} kısayol",
+                    Text(if (filesOnly) "${transferHistory.size} dosya" else "${actions.size} kısayol",
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 OutlinedTextField(value = search, onValueChange = { search = it },
@@ -423,10 +441,10 @@ fun PcControlsScreen(client: EonUsbClient, filesOnly: Boolean, modifier: Modifie
                 if (actions.isEmpty()) "İlk kısayolunu oluştur. Cihaz iznin varsa buradan çalıştırabilirsin."
                 else "Arama metnini veya filtreyi değiştir.")
         }
-        if (loaded && filesOnly && filteredFiles.isEmpty()) item(key = "files-empty") {
+        if (filesOnly && (loaded || receivedFiles.isNotEmpty()) && filteredFiles.isEmpty()) item(key = "files-empty") {
             EmptyControlState(Icons.Rounded.FolderOpen,
-                if (files.isEmpty()) "Aktarım kuyruğu boş" else "Eşleşen dosya bulunamadı",
-                if (files.isEmpty()) "PC’den bu telefona dosya gönderilebilir veya yukarıdan bir dosya seçebilirsin."
+                if (transferHistory.isEmpty()) "Aktarım kuyruğu boş" else "Eşleşen dosya bulunamadı",
+                if (transferHistory.isEmpty()) "PC’den bu telefona dosya gönderilebilir veya yukarıdan bir dosya seçebilirsin."
                 else "Arama metnini veya filtreyi değiştir.")
         }
         if (!filesOnly) items(filteredActions, key = { "action-${it.id}" }) { action ->
@@ -636,7 +654,7 @@ private fun FileControlCard(file: PhoneFile) {
                 Text(when (file.state) {
                     "queued" -> "Alınmayı bekliyor"
                     "transferring" -> "Aktarılıyor"
-                    "completed" -> "Tamamlandı"
+                    "completed" -> if (file.download != null) "Telefona kaydedildi" else "Tamamlandı"
                     "cancelled" -> "İptal edildi"
                     else -> "Durum bilinmiyor"
                 }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -653,6 +671,69 @@ private fun FileControlCard(file: PhoneFile) {
                 Text("Downloads klasörüne otomatik kaydediliyor.", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            file.download?.let { ReceivedFileActions(it, Modifier.fillMaxWidth()) }
+        }
+    }
+}
+
+@Composable
+private fun ReceivedFileActions(file: ReceivedDownload, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var checking by remember(file.id) { mutableStateOf(false) }
+    var error by rememberSaveable(file.id) { mutableStateOf<String?>(null) }
+
+    fun launchFile(share: Boolean) {
+        checking = true
+        error = null
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openFileDescriptor(file.uri, "r")?.close()
+                        ?: throw IOException("Dosya açılamadı.")
+                }
+                val intent = Intent(if (share) Intent.ACTION_SEND else Intent.ACTION_VIEW).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    if (share) {
+                        type = file.mimeType
+                        putExtra(Intent.EXTRA_STREAM, file.uri)
+                        clipData = ClipData.newRawUri(file.name, file.uri)
+                    } else {
+                        setDataAndType(file.uri, file.mimeType)
+                    }
+                }
+                context.startActivity(if (share) Intent.createChooser(intent, null) else intent)
+            } catch (_: ActivityNotFoundException) {
+                error = if (share) "Dosyayı paylaşacak bir uygulama bulunamadı." else
+                    "Bu dosya türünü açacak bir uygulama bulunamadı. Dosyayı yine de paylaşabilirsin."
+            } catch (_: IOException) {
+                error = "Dosyaya erişilemedi. İndirilenler klasörünü kontrol et."
+            } catch (_: SecurityException) {
+                error = "Dosyaya erişim izni yok. İndirilenler klasörünü kontrol et."
+            } finally {
+                checking = false
+            }
+        }
+    }
+
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(onClick = { launchFile(share = false) }, enabled = !checking,
+                modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Aç")
+            }
+            OutlinedButton(onClick = { launchFile(share = true) }, enabled = !checking,
+                modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Rounded.Share, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Paylaş")
+            }
+        }
+        error?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
     }
 }

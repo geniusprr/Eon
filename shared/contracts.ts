@@ -38,6 +38,8 @@ export interface DeckPage {
 /** The PC stores the authoritative Deck and additional named screens. */
 export interface DeckLayout {
   /** Hides visual shortcut labels across Deck pages; accessible names remain. */
+  /** null or omitted uses the default order; [] intentionally hides every shortcut. */
+  shortcutIds?: string[] | null
   hideShortcutNames?: boolean
   pages?: DeckPage[]
   version: 1
@@ -49,6 +51,8 @@ export interface DeckLayout {
 }
 export interface DeckLayoutSetInput {
   /** Hides visual shortcut labels across Deck pages; accessible names remain. */
+  /** null or omitted uses the default order; [] intentionally hides every shortcut. */
+  shortcutIds?: string[] | null
   hideShortcutNames?: boolean
   pages?: DeckPage[]
   baseRevision: number

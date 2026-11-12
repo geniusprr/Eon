@@ -10,21 +10,49 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 
-/** One foreground receiver shared by every Eon screen. Called sequentially on Dispatchers.IO. */
-class IncomingDownloads(private val context: Context, private val client: EonUsbClient) {
-    private val receipts = context.getSharedPreferences("eon2-downloads", Context.MODE_PRIVATE)
+/** Exposes saved public downloads on API 26–28 via temporary per-file grants. */
+class LegacyDownloadsProvider : FileProvider()
 
-    suspend fun receivePending(): List<String> {
+internal data class ReceivedDownload(
+    val id: String,
+    val name: String,
+    val size: Long,
+    val uri: Uri,
+    val mimeType: String,
+    val savedAt: Long,
+)
+
+/** One foreground receiver shared by every Eon screen. Called sequentially on Dispatchers.IO. */
+internal class IncomingDownloads(private val context: Context, private val client: EonUsbClient) {
+    private val receipts = context.getSharedPreferences("eon2-downloads", Context.MODE_PRIVATE)
+    private val saved = MutableStateFlow<List<ReceivedDownload>>(emptyList())
+    val receivedFiles = saved.asStateFlow()
+
+    fun loadReceipts() {
+        saved.value = receipts.all.mapNotNull { (key, value) ->
+            if (!key.startsWith("file-") || value !is String) return@mapNotNull null
+            try {
+                val record = JSONObject(value)
+                ReceivedDownload(key.removePrefix("file-"), record.getString("name"), record.getLong("size"),
+                    Uri.parse(record.getString("uri")), record.getString("mimeType"), record.getLong("savedAt"))
+            } catch (_: org.json.JSONException) { null }
+        }.sortedByDescending { it.savedAt }
+    }
+
+    suspend fun receivePending() {
         // A paired device may have file access disabled; passive polling is then idle.
         val files = try { client.files().getJSONArray("files") }
-        catch (_: EonAccessDeniedException) { return emptyList() }
-        val received = mutableListOf<String>()
+        catch (_: EonAccessDeniedException) { return }
         for (index in 0 until files.length()) {
             currentCoroutineContext().ensureActive()
             val file = files.getJSONObject(index)
@@ -40,24 +68,35 @@ class IncomingDownloads(private val context: Context, private val client: EonUsb
             if (!receipts.getBoolean("done-$id", false)) {
                 val coroutine = currentCoroutineContext()
                 val progress: (Long) -> Unit = { coroutine.ensureActive() }
-                if (Build.VERSION.SDK_INT >= 29) saveMediaStore(id, name, file, progress)
-                else saveLegacy(id, name, file, progress)
+                val extension = File(name).extension.lowercase(Locale.ROOT)
+                val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
+                val download = ReceivedDownload(id, name, file.getLong("size"), Uri.EMPTY, mimeType, System.currentTimeMillis())
+                if (Build.VERSION.SDK_INT >= 29) saveMediaStore(download, file, progress)
+                else saveLegacy(download, file, progress)
             }
             client.finishReceivedFile(id)
-            received.add(name)
         }
-        return received
+    }
+
+    private fun recordSaved(download: ReceivedDownload, uri: Uri) {
+        val completed = download.copy(uri = uri, savedAt = System.currentTimeMillis())
+        val record = JSONObject().put("name", completed.name).put("size", completed.size)
+            .put("uri", uri.toString()).put("mimeType", completed.mimeType).put("savedAt", completed.savedAt)
+        val id = completed.id
+        check(receipts.edit().putBoolean("done-$id", true).putString("file-$id", record.toString())
+            .remove("pending-$id").commit()) { "İndirme kaydı saklanamadı." }
+        saved.value = listOf(completed) + saved.value
     }
 
     @android.annotation.TargetApi(29)
-    private fun saveMediaStore(id: String, name: String, file: JSONObject, progress: (Long) -> Unit) {
+    private fun saveMediaStore(download: ReceivedDownload, file: JSONObject, progress: (Long) -> Unit) {
+        val id = download.id
         val resolver = context.contentResolver
         // Remove a partial download left by process death before starting again.
         receipts.getString("pending-$id", null)?.let { resolver.delete(Uri.parse(it), null, null) }
-        val extension = name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT)
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, name)
-            put(MediaStore.Downloads.MIME_TYPE, MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream")
+            put(MediaStore.Downloads.DISPLAY_NAME, download.name)
+            put(MediaStore.Downloads.MIME_TYPE, download.mimeType)
             put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
@@ -71,16 +110,18 @@ class IncomingDownloads(private val context: Context, private val client: EonUsb
                 }
             } ?: error("Downloads dosyası açılamadı.")
             check(resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) == 1) { "İndirme tamamlanamadı." }
-            check(receipts.edit().putBoolean("done-$id", true).remove("pending-$id").commit()) { "İndirme kaydı saklanamadı." }
+            recordSaved(download, uri)
         } catch (error: Exception) {
             runCatching { resolver.delete(uri, null, null) }
-            receipts.edit().remove("done-$id").apply()
+            receipts.edit().remove("done-$id").remove("file-$id").apply()
             throw error
         }
     }
 
     @Suppress("DEPRECATION")
-    private fun saveLegacy(id: String, name: String, file: JSONObject, progress: (Long) -> Unit) {
+    private fun saveLegacy(download: ReceivedDownload, file: JSONObject, progress: (Long) -> Unit) {
+        val id = download.id
+        val name = download.name
         val directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         check(directory.isDirectory || directory.mkdirs()) { "Downloads klasörü açılamadı." }
         val temporary = File(directory, ".eon-$id.part")
@@ -96,10 +137,11 @@ class IncomingDownloads(private val context: Context, private val client: EonUsb
             }
             try {
                 check(temporary.renameTo(destination)) { "İndirilen dosya kaydedilemedi." }
-                check(receipts.edit().putBoolean("done-$id", true).commit()) { "İndirme kaydı saklanamadı." }
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.downloads", destination)
+                recordSaved(download, uri)
             } catch (error: Exception) {
                 destination.delete()
-                receipts.edit().remove("done-$id").apply()
+                receipts.edit().remove("done-$id").remove("file-$id").apply()
                 throw error
             }
             MediaScannerConnection.scanFile(context, arrayOf(destination.absolutePath), null, null)

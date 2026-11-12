@@ -7,7 +7,6 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.kapanis.mobil.eon2.data.EonNotesRepository
 import com.kapanis.mobil.eon2.data.SyncApplyResult
-import com.kapanis.mobil.eon2.protocol.CanonicalNotes
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,8 +14,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.json.JSONArray
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -42,6 +41,7 @@ class EonAccessDeniedException : IllegalStateException("PC erişimi reddedildi. 
 /** Uses Android local loopback through ADB reverse; never scans or connects to arbitrary LAN IPs. */
 class EonUsbClient(private val context: Context, private val repository: EonNotesRepository) {
     companion object {
+        private val random = SecureRandom()
         // One bounded connection pool/dispatcher for every screen and configuration change.
         private val http = OkHttpClient.Builder().connectTimeout(1200, TimeUnit.MILLISECONDS)
             .followRedirects(false).followSslRedirects(false)
@@ -96,8 +96,7 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
         } catch (_: Exception) { EonPeerStatus(false, "Bilgisayar bekleniyor", isPaired) }
     }
 
-    fun newPairingToken(): String = ByteArray(32).also { SecureRandom().nextBytes(it) }
-        .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
+    fun newPairingToken(): String = ByteArray(32).also(random::nextBytes).toHexString()
 
     fun pairingPrompt(): UsbPrompt? {
         val response = request("GET", "/v1/usb-approval/prompt", null, false, usbBaseUrl)
@@ -193,10 +192,12 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
     fun deck(): JSONObject = request("GET", "/v1/deck", null, true)
     fun deckLayout(): JSONObject = request("GET", "/v1/deck/layout", null, true)
     fun saveDeckLayout(baseRevision: Int, widgets: JSONArray, quickIds: List<String>? = null,
-        updateQuickIds: Boolean = false, pages: JSONArray? = null, hideShortcutNames: Boolean? = null): JSONObject = request("POST", "/v1/deck/layout",
+        updateQuickIds: Boolean = false, pages: JSONArray? = null, hideShortcutNames: Boolean? = null,
+        shortcutIds: List<String>? = null, updateShortcutIds: Boolean = false): JSONObject = request("POST", "/v1/deck/layout",
         JSONObject().put("baseRevision", baseRevision).put("widgets", widgets).apply {
             if (updateQuickIds) put("quickIds", quickIds?.let { JSONArray(it) } ?: JSONObject.NULL)
             if (pages != null) put("pages", pages)
+            if (updateShortcutIds) put("shortcutIds", shortcutIds?.let { JSONArray(it) } ?: JSONObject.NULL)
             if (hideShortcutNames != null) put("hideShortcutNames", hideShortcutNames)
         }, true)
     fun executeDeckCommand(id: String): JSONObject = request("POST", "/v1/deck/execute", JSONObject().put("id", id), true)
@@ -286,26 +287,8 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
     }
 
     private fun request(method: String, pathname: String, json: JSONObject?, authorised: Boolean, endpoint: String = currentBaseUrl): JSONObject {
-        val body = json?.toString()?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
-        require(body.size <= 32 * 1024 * 1024) { "Bu not güncellemesi tek isteğe sığmıyor. Not cihazda korunuyor." }
-        val builder = Request.Builder().url(endpoint + pathname)
-            .header("Cache-Control", "no-store")
-        if (authorised) {
-            val secret = keystore.getSecret() ?: error("Eşleştirme anahtarı bulunamadı")
-            val now = System.currentTimeMillis().toString()
-            val nonce = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
-            val digest = CanonicalNotes.sha256(String(body, Charsets.UTF_8))
-            val signingText = "$method\n$pathname\n$now\n$nonce\n$digest"
-            val keyBytes = Base64.decode(secret, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
-            val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(keyBytes, "HmacSHA256")) }
-            val signature = mac.doFinal(signingText.toByteArray(Charsets.UTF_8))
-                .joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
-            builder.header("X-Eon-Device", repository.deviceId)
-                .header("X-Eon-Time", now).header("X-Eon-Nonce", nonce).header("X-Eon-Signature", signature)
-        }
-        if (method == "POST") builder.post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        else builder.get()
-        (if (pathname == "/v1/ai/send") aiHttp else http).newCall(builder.build()).execute().use { response ->
+        val request = buildRequest(method, pathname, json, authorised, endpoint)
+        (if (pathname == "/v1/ai/send") aiHttp else http).newCall(request).execute().use { response ->
             val payload = response.body?.string() ?: ""
             if (!response.isSuccessful) {
                 if (pathname == "/v1/deck/layout" && response.code == 409) {
@@ -327,6 +310,35 @@ class EonUsbClient(private val context: Context, private val repository: EonNote
             if (pathname == "/v1/ai/pending" && payload.trim() == "null") return JSONObject()
             return JSONObject(payload)
         }
+    }
+
+    internal fun remoteDesktop(): PcRemoteConnection {
+        val endpoint = currentBaseUrl
+        return PcRemoteConnection(http) { operation, body ->
+            buildRequest(if (body == null) "GET" else "POST", "/v1/remote-desktop/$operation", body, true, endpoint)
+        }
+    }
+
+    private fun buildRequest(method: String, pathname: String, json: JSONObject?, authorised: Boolean, endpoint: String): Request {
+        val body = json?.toString()?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
+        require(body.size <= 32 * 1024 * 1024) { "Bu not güncellemesi tek isteğe sığmıyor. Not cihazda korunuyor." }
+        val builder = Request.Builder().url(endpoint + pathname)
+            .header("Cache-Control", "no-store")
+        if (authorised) {
+            val secret = keystore.getSecret() ?: error("Eşleştirme anahtarı bulunamadı")
+            val now = System.currentTimeMillis().toString()
+            val nonce = ByteArray(16).also(random::nextBytes).toHexString()
+            val digest = MessageDigest.getInstance("SHA-256").digest(body).toHexString()
+            val signingText = "$method\n$pathname\n$now\n$nonce\n$digest"
+            val keyBytes = Base64.decode(secret, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(keyBytes, "HmacSHA256")) }
+            val signature = mac.doFinal(signingText.toByteArray(Charsets.UTF_8)).toHexString()
+            builder.header("X-Eon-Device", repository.deviceId)
+                .header("X-Eon-Time", now).header("X-Eon-Nonce", nonce).header("X-Eon-Signature", signature)
+        }
+        if (method == "POST") builder.post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+        else builder.get()
+        return builder.build()
     }
 }
 

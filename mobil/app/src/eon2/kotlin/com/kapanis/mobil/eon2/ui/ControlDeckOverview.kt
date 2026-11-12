@@ -34,8 +34,10 @@ import org.json.JSONObject
 private val Green = Color(0xFF7BD2A4)
 @Composable
 internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerStatus,message:String?,busy:Boolean,
+    bottomClearance: androidx.compose.ui.unit.Dp,
     onPair:()->Unit,
-    onOpenPcActions:()->Unit) {
+    onOpenPcActions:()->Unit,
+    onOpenPcRemote:()->Unit) {
     val scope = rememberCoroutineScope()
     val active = peer.connected && peer.paired
     var deck by remember(active, peer.name) { mutableStateOf<JSONObject?>(null) }
@@ -99,7 +101,7 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
         }
     }
 
-    Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal=24.dp,vertical=20.dp),
+    Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal=24.dp,vertical=20.dp).padding(bottom = bottomClearance),
         verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
             Text("Kontrol", style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Bold)
@@ -158,6 +160,11 @@ internal fun ControlsContent(modifier:Modifier,client:EonUsbClient,peer:EonPeerS
         }
         if (sending) LinearProgressIndicator(Modifier.fillMaxWidth())
 
+        OutlinedButton(onClick=onOpenPcRemote, modifier=Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.DesktopWindows, null, modifier=Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("PC ekranı")
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Hızlı komutlar", style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)

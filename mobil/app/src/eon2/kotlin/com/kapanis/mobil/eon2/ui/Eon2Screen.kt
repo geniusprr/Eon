@@ -20,6 +20,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +55,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -74,6 +82,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
@@ -87,6 +101,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kapanis.mobil.eon2.data.EonLocalNote
 import com.kapanis.mobil.eon2.data.EonNoteConflict
 import com.kapanis.mobil.eon2.data.EonNotesRepository
@@ -110,7 +125,11 @@ private enum class EonTab(val label: String, val icon: ImageVector) {
     Settings("Ayarlar", Icons.Rounded.Settings),
 }
 
-private enum class ControlPage { Overview, Actions }
+private val portraitTabs = listOf(EonTab.Controls, EonTab.Ai, EonTab.LocalSend, EonTab.Notes)
+private const val portraitSlotCount = 5
+private const val rotationSlot = 2
+
+private enum class ControlPage { Overview, Actions, Remote }
 
 private val Green = Color(0xFF7BD2A4)
 
@@ -139,6 +158,9 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
     val downloads = remember(client) { IncomingDownloads(context.applicationContext, client) }
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableStateOf(EonTab.Controls) }
+    val receivedFiles by downloads.receivedFiles.collectAsStateWithLifecycle()
+    val transferSnackbar = remember { SnackbarHostState() }
+    var lastMainTab by rememberSaveable { mutableStateOf(EonTab.Controls) }
     var controlPage by remember { mutableStateOf(ControlPage.Overview) }
     var peer by remember { mutableStateOf(EonPeerStatus(false, "Bilgisayar aranıyor", false)) }
     var notes by remember { mutableStateOf<List<EonLocalNote>>(emptyList()) }
@@ -167,13 +189,14 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         }
     }
     LaunchedEffect(downloads) {
+        withContext(Dispatchers.IO) { downloads.loadReceipts() }
         var lastError: String? = null
         while (isActive) {
             if (foreground && peer.connected && peer.paired && (Build.VERSION.SDK_INT >= 29 ||
                 context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)) {
+                val previousCount = downloads.receivedFiles.value.size
                 try {
-                    val received = withContext(Dispatchers.IO) { downloads.receivePending() }
-                    if (received.isNotEmpty()) Toast.makeText(context, "Downloads’a kaydedildi: ${received.joinToString()}", Toast.LENGTH_LONG).show()
+                    withContext(Dispatchers.IO) { downloads.receivePending() }
                     lastError = null
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) {
@@ -182,6 +205,20 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                         message = text
                         Toast.makeText(context, text, Toast.LENGTH_LONG).show()
                         lastError = text
+                    }
+                }
+                val latest = downloads.receivedFiles.value
+                val count = latest.size - previousCount
+                if (count > 0 && tab != EonTab.LocalSend && !landscape) {
+                    transferSnackbar.currentSnackbarData?.dismiss()
+                    launch {
+                        val label = if (count == 1) "Dosya alındı: ${latest.first().name}" else "$count dosya alındı"
+                        if (transferSnackbar.showSnackbar(label, actionLabel = "Dosyalar") == SnackbarResult.ActionPerformed) {
+                            selected = null
+                            selectedConflict = null
+                            createNew = false
+                            tab = EonTab.LocalSend
+                        }
                     }
                 }
             }
@@ -319,14 +356,21 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         )
     }
 
-    BackHandler(enabled = !landscape && (selected != null || createNew ||
+    BackHandler(enabled = !landscape && (tab == EonTab.Settings || selected != null || createNew ||
         (tab == EonTab.Controls && controlPage != ControlPage.Overview))) {
-        if (tab == EonTab.Controls && controlPage != ControlPage.Overview) controlPage = ControlPage.Overview
+        if (tab == EonTab.Settings) tab = lastMainTab
+        else if (tab == EonTab.Controls && controlPage != ControlPage.Overview) controlPage = ControlPage.Overview
         else { selected = null; selectedConflict = null; createNew = false }
     }
     val pageStates = rememberSaveableStateHolder()
+    if (tab == EonTab.Controls && controlPage == ControlPage.Remote) {
+        PcRemoteScreen(client, peer, foreground,
+            onBack = { controlPage = ControlPage.Overview },
+            onRotate = { requestOrientation(if (landscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) })
+        return
+    }
     if (landscape) {
-        LandscapeDeck(
+        pageStates.SaveableStateProvider("landscape") { LandscapeDeck(
             client = client,
             peer = peer,
             foreground = foreground,
@@ -339,11 +383,23 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                 requestOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
             },
             onPortrait = { requestOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) },
-        )
+        ) }
         return
+    }
+    val density = LocalDensity.current
+    val systemBottom = WindowInsets.navigationBars.getBottom(density)
+    val imeVisible = WindowInsets.ime.getBottom(density) > systemBottom
+    val noteEditor = tab == EonTab.Notes && (selected != null || createNew)
+    val navigationVisible = !noteEditor && !imeVisible
+    var navigationHeight by remember { mutableStateOf(0) }
+    val bottomClearance = with(density) {
+        if (imeVisible) 0.dp
+        else if (navigationVisible && navigationHeight > 0) navigationHeight.toDp()
+        else systemBottom.toDp() + if (navigationVisible) 80.dp else 0.dp
     }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         topBar = {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 24.dp, vertical = 8.dp),
@@ -352,10 +408,6 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                     Image(painterResource(R.drawable.eon_launcher_foreground), "Eon logosu", modifier = Modifier.fillMaxSize())
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { requestOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) },
-                        modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.ScreenRotation, "Deck'i yatay aç", modifier = Modifier.size(21.dp))
-                    }
                     Surface(modifier = Modifier.eonGlass(RoundedCornerShape(20.dp)), color = Color.Transparent,
                         shape = RoundedCornerShape(20.dp)) {
                         Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -364,22 +416,32 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                             Text(if (peer.connected && peer.paired) "Bağlı" else "Yerel", fontSize = 11.sp)
                         }
                     }
+                    IconButton(onClick = {
+                        if (tab == EonTab.Settings) tab = lastMainTab
+                        else { lastMainTab = tab; tab = EonTab.Settings }
+                    }, enabled = !noteEditor, modifier = Modifier.size(48.dp).semantics {
+                        this.selected = tab == EonTab.Settings
+                    }) {
+                        Icon(Icons.Rounded.Settings, "Ayarlar", tint = if (tab == EonTab.Settings)
+                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         },
 
     ) { padding ->
-        val navigationVisible = tab != EonTab.Notes || (selected == null && !createNew)
-        val contentModifier = Modifier.fillMaxSize().padding(padding)
-        val insetContentModifier = contentModifier.padding(bottom = if (navigationVisible) 104.dp else 0.dp)
+        val contentModifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())
+            .then(if (noteEditor) Modifier.navigationBarsPadding() else Modifier).imePadding()
         pageStates.SaveableStateProvider(tab) {
         when (tab) {
             EonTab.Ai -> EonAiScreen(client, peer.connected && peer.paired, aiChatState, scope,
-                insetContentModifier, onConnect = { tab = EonTab.Controls })
-            EonTab.LocalSend -> PcControlsScreen(client, true, insetContentModifier, onBack = { tab = EonTab.Controls })
+                contentModifier, bottomClearance, onConnect = { tab = EonTab.Controls })
+            EonTab.LocalSend -> PcControlsScreen(client, true, contentModifier, bottomClearance,
+                receivedFiles = receivedFiles, onBack = { tab = EonTab.Controls })
             EonTab.Controls -> when (controlPage) {
-                ControlPage.Actions -> PcControlsScreen(client, false, insetContentModifier, onBack = { controlPage = ControlPage.Overview })
-                ControlPage.Overview -> ControlsContent(insetContentModifier, client, peer, message, answering || outgoingToken != null,
+                ControlPage.Remote -> Unit
+                ControlPage.Actions -> PcControlsScreen(client, false, contentModifier, bottomClearance, onBack = { controlPage = ControlPage.Overview })
+                ControlPage.Overview -> ControlsContent(contentModifier, client, peer, message, answering || outgoingToken != null, bottomClearance,
                     onPair = {
                         scope.launch {
                             val token = client.newPairingToken()
@@ -395,7 +457,8 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                             finally { answering = false }
                         }
                     },
-                    onOpenPcActions = { controlPage = ControlPage.Actions })
+                    onOpenPcActions = { controlPage = ControlPage.Actions },
+                    onOpenPcRemote = { controlPage = ControlPage.Remote })
             }
             EonTab.Notes -> if (selected?.conflict == true && selectedConflict == null) {
                 Column(contentModifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -427,14 +490,14 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                     selected=null; createNew=false
                     scope.launch { reloadNotes(); if(peer.connected && peer.paired) doSync() }
                 }, message=message)
-            } else NotesContent(insetContentModifier, notes, onNew={createNew=true;message=null}, onOpen={ note ->
+            } else NotesContent(contentModifier, notes, bottomClearance, onNew={createNew=true;message=null}, onOpen={ note ->
                 selected=note;message=null
                 if (note.conflict) scope.launch {
                     try { selectedConflict = withContext(Dispatchers.IO) { store.conflict(note.id) } }
                     catch (error: Exception) { message = error.message ?: "Çakışma sürümleri yüklenemedi." }
                 } else selectedConflict = null
             })
-            EonTab.Settings -> Column(contentModifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).padding(bottom = 110.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            EonTab.Settings -> Column(contentModifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).padding(bottom = bottomClearance), verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 Text("Ayarlar", style=MaterialTheme.typography.headlineLarge)
                 EonAppearancePicker(theme, !settingsBusy) { updateSetting("theme", it) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
@@ -462,16 +525,21 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         }
         }
     }
-    Box(Modifier.align(Alignment.BottomCenter)) {
-            if (tab != EonTab.Notes || (selected == null && !createNew)) {
-                FloatingEonNavigation(tab) { destination ->
-                    tab = destination
-                    controlPage = ControlPage.Overview
-                    selected = null
-                    selectedConflict = null
-                    createNew = false
-                }
-            }
+    if (navigationVisible) {
+        val shade = if (MaterialTheme.colorScheme.background.luminance() < .5f) Color.Black else Color.White
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bottomClearance)
+            .background(Brush.verticalGradient(0f to Color.Transparent, .65f to shade.copy(alpha = .65f), 1f to shade)))
+        FloatingEonNavigation(tab, Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = it.height },
+            onRotate = { requestOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }) { destination ->
+            tab = destination
+            controlPage = ControlPage.Overview
+            selected = null
+            selectedConflict = null
+            createNew = false
+        }
+    }
+    if (navigationVisible) {
+        SnackbarHost(transferSnackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = bottomClearance))
     }
     }
 }
@@ -482,49 +550,69 @@ internal fun EonCard(modifier:Modifier=Modifier, content:@Composable ()->Unit) {
 }
 
 @Composable
-private fun FloatingEonNavigation(selected: EonTab, onSelect: (EonTab) -> Unit) {
-    Box(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
+internal fun EonRotationButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val colors = MaterialTheme.colorScheme
+    Box(modifier.size(48.dp).clip(RoundedCornerShape(17.dp))
+        .clickable(enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(39.dp).background(colors.primaryContainer, RoundedCornerShape(14.dp))
+            .border(1.dp, colors.primary.copy(alpha = .55f), RoundedCornerShape(14.dp)))
+        Image(painterResource(R.drawable.eon_launcher_foreground), null,
+            modifier = Modifier.align(Alignment.Center).offset(x = (-3).dp, y = (-2).dp).size(34.dp))
+        Box(Modifier.align(Alignment.BottomEnd).size(21.dp).background(colors.primary, CircleShape),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.ScreenRotation, label, tint = colors.onPrimary, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun FloatingEonNavigation(selected: EonTab, modifier: Modifier, onRotate: () -> Unit, onSelect: (EonTab) -> Unit) {
+    Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center) {
+        val barShape = RoundedCornerShape(32.dp)
+        val indicatorShape = RoundedCornerShape(26.dp)
         Surface(
-            modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth()
-                .eonGlass(RoundedCornerShape(32.dp), prominent = true),
-            shape = RoundedCornerShape(32.dp),
-            color = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().eonGlass(barShape, prominent = true),
+            shape = barShape, color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
-            BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
-            val slotWidth = maxWidth / EonTab.entries.size
-            val position by animateFloatAsState(selected.ordinal.toFloat(),
-                animationSpec = tween(260, easing = FastOutSlowInEasing), label = "Sekme merceği")
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            Box(Modifier.offset { IntOffset(with(density) { (slotWidth * position).roundToPx() }, 0) }
-                .width(slotWidth).height(58.dp).clip(RoundedCornerShape(26.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = .12f))
-                .border(.75.dp, MaterialTheme.colorScheme.primary.copy(alpha = .22f), RoundedCornerShape(26.dp)))
-            Row(Modifier.fillMaxWidth().selectableGroup()) {
-                EonTab.entries.forEach { destination ->
-                    val isSelected = selected == destination
-                    val selectedColor = MaterialTheme.colorScheme.primary
-                    val onInactive = MaterialTheme.colorScheme.onSurfaceVariant
-                    Column(
-                        modifier = Modifier.weight(1f).heightIn(min = 58.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .selectable(selected = isSelected, role = Role.Tab,
-                                onClick = { if (!isSelected) onSelect(destination) })
-                            .padding(vertical = 7.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Icon(destination.icon, contentDescription = null,
-                            tint = if (isSelected) selectedColor else onInactive, modifier = Modifier.size(22.dp))
-                        Text(destination.label, fontSize = 11.sp, maxLines = 1,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) selectedColor else onInactive)
+            Box(Modifier.fillMaxWidth().padding(5.dp)) {
+                val index = portraitTabs.indexOf(selected)
+                if (index >= 0) {
+                    val position by animateFloatAsState((index + if (index >= rotationSlot) 1 else 0).toFloat(),
+                        animationSpec = tween(260, easing = FastOutSlowInEasing), label = "Sekme merceği")
+                    BoxWithConstraints(Modifier.matchParentSize()) {
+                        val slotWidth = maxWidth / portraitSlotCount
+                        Box(Modifier.offset { IntOffset((slotWidth * position).roundToPx(), 0) }
+                            .width(slotWidth).fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), indicatorShape)
+                            .border(.75.dp, MaterialTheme.colorScheme.primary.copy(alpha = .22f), indicatorShape))
                     }
                 }
-            }
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectableGroup(),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    for (slot in 0 until portraitSlotCount) {
+                        if (slot == rotationSlot) {
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                EonRotationButton("Deck'i yatay aç", onRotate)
+                            }
+                            continue
+                        }
+                        val destination = portraitTabs[slot - if (slot > rotationSlot) 1 else 0]
+                        val isSelected = selected == destination
+                        val tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        Column(
+                            modifier = Modifier.weight(1f).heightIn(min = 56.dp).clip(indicatorShape)
+                                .selectable(selected = isSelected, role = Role.Tab, onClick = { if (!isSelected) onSelect(destination) })
+                                .padding(horizontal = 2.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(destination.icon, null, tint = tint, modifier = Modifier.size(21.dp))
+                            Text(destination.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = tint)
+                        }
+                    }
+                }
             }
         }
     }

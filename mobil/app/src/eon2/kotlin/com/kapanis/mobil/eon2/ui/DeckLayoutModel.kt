@@ -36,9 +36,11 @@ internal data class DeckPage(val id: String, val name: String, val widgets: List
 
 internal data class DeckLayout(val revision: Int, val updatedAt: Long, val widgets: List<DeckWidget>,
     val quickIds: List<String>? = null, val quickIdsSpecified: Boolean = false, val pages: List<DeckPage> = emptyList(),
-    val pagesSpecified: Boolean = false, val hideShortcutNames: Boolean = false) {
+    val pagesSpecified: Boolean = false, val hideShortcutNames: Boolean = false,
+    val shortcutIds: List<String>? = null) {
     fun toJson(): String = JSONObject().put("version", 1).put("revision", revision)
         .put("updatedAt", updatedAt).put("hideShortcutNames", hideShortcutNames).put("widgets", widgetsToJson(widgets)).also { json ->
+            shortcutIds?.let { json.put("shortcutIds", JSONArray(it)) }
             if (pagesSpecified || pages.isNotEmpty()) json.put("pages", pagesToJson(pages))
             if (quickIdsSpecified) json.put("quickIds", quickIds?.let { JSONArray(it) } ?: JSONObject.NULL)
         }.toString()
@@ -93,7 +95,14 @@ internal data class DeckLayout(val revision: Int, val updatedAt: Long, val widge
                 }.also { require(it.map { page -> page.id }.distinct().size == it.size) }
             }
             require(!source.has("hideShortcutNames") || source.get("hideShortcutNames") is Boolean)
-            return DeckLayout(revision, updatedAt, widgets, quickIds, hasQuickIds, pages, hasPages, source.optBoolean("hideShortcutNames", false))
+            val shortcutIds = if (source.isNull("shortcutIds")) null else {
+                val list = source.getJSONArray("shortcutIds")
+                val pattern = Regex("(?:tool:(?:explorer|terminal|tasks|settings)|action:[a-zA-Z0-9-]{1,90})")
+                (0 until list.length()).map { index -> (list.get(index) as? String ?: error("Geçersiz kısayol.")) }
+                    .also { ids -> require(ids.toSet().size == ids.size && ids.all(pattern::matches)) }
+            }
+            return DeckLayout(revision, updatedAt, widgets, quickIds, hasQuickIds, pages, hasPages,
+                source.optBoolean("hideShortcutNames", false), shortcutIds)
         }
     }
 }

@@ -50,28 +50,14 @@
 }
 .eon-mirror-phone {
   --screen-ratio:2.32;
-  --bezel:clamp(6px,.85cqw,12px);
-  --frame-inset:calc(2 * (var(--bezel) + 1px));
-  box-sizing:border-box;
+  --frame-bezel:clamp(8px,.9cqw,12px);
+  --frame-screen-radius:clamp(12px,2vw,28px);
+  --frame-inset:calc(2 * (var(--frame-bezel) + 1px));
   width:min(100%,1240px,calc((100cqh - var(--frame-inset)) * var(--screen-ratio) + var(--frame-inset)));
-  position:relative; container-type:inline-size; min-width:0;
-  padding:var(--bezel);
-  border:1px solid #4c5765;
-  border-radius:clamp(21px,3vw,38px);
-  background:linear-gradient(138deg,#414b58 0%,#0a1018 12%,#080c11 68%,#343e4a 100%);
-  box-shadow:0 22px 48px #0005,0 0 0 1px #0009 inset,0 1px 0 #ffffff26 inset;
-}
-.eon-mirror-phone::before {
-  content:''; position:absolute; pointer-events:none; z-index:3;
-  width:4px; height:4px; right:clamp(2px,.3vw,6px); top:50%;
-  transform:translateY(-50%); border:1px solid #445970; border-radius:50%; background:#111c29;
-}
-.eon-mirror-phone::after {
-  content:''; position:absolute; left:-3px; top:18%; width:3px; height:18%;
-  background:linear-gradient(#657180,#303945); border-radius:3px 0 0 3px;
+  container-type:inline-size; min-width:0;
 }
 .eon-mirror-display { --mirror-content-padding:clamp(4px,1.4cqw,16px); display:flex; flex-direction:column; position:relative; background:radial-gradient(ellipse at 90% 12%,color-mix(in srgb,var(--mirror-mint) 10%,transparent),transparent 65%),linear-gradient(135deg,var(--mirror-bg),color-mix(in srgb,var(--mirror-mint) 9%,var(--mirror-bg)),var(--mirror-bg));
-  color:var(--mirror-ink); border-radius:clamp(10px,2.5cqw,29px); overflow:hidden; aspect-ratio:var(--screen-ratio); padding-top:var(--mirror-content-padding); }
+  color:var(--mirror-ink); overflow:hidden; aspect-ratio:var(--screen-ratio); padding-top:var(--mirror-content-padding); }
 .eon-mirror-grid {
   flex:1; min-height:0; width:100%; padding:0 var(--mirror-content-padding);
   display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-template-rows:repeat(6,minmax(0,1fr));
@@ -160,15 +146,28 @@
   .eon-mirror-quick-overlay button { padding:3px 5px; font-size:9px; }
   .eon-mirror-quick-selected>div span { font-size:9px; }
 }
-.eon-mirror-foot { flex:0 0 10%; min-height:0; display:flex; align-items:center; gap:12px; padding:2px clamp(10px,1.9vw,25px); }
-.eon-mirror-foot-status { display:flex; align-items:center; gap:8px; min-width:0; flex:1; color:var(--mirror-subtle); font-size:clamp(8px,.8vw,11px); }
+.eon-mirror-foot { flex:0 0 5.95cqw; min-height:0; display:flex; align-items:center; gap:.82cqw;
+  padding:0 var(--mirror-content-padding); font:500 clamp(8px,1.4cqw,14px)/1.2 Roboto,system-ui,sans-serif; }
+.eon-mirror-foot-status { display:flex; align-items:center; gap:.82cqw; min-width:0; flex:1; color:var(--mirror-subtle); }
 .eon-mirror-foot-status>span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.eon-mirror-foot-pages { display:flex; align-items:center; justify-content:center; gap:8px; color:var(--mirror-subtle); font-size:clamp(8px,.86vw,11px); }
-.eon-mirror-foot-pages span { white-space:nowrap; }
-.eon-mirror-foot-pages span.is-current { color:var(--mirror-mint); font-weight:730; }
-.eon-mirror-foot-tools { display:flex; align-items:center; gap:4px; }
-.eon-mirror-foot-tools button { background:transparent; border:0; border-radius:8px; padding:6px; color:var(--mirror-subtle); }
-.eon-mirror-foot-tools button:hover { color:var(--mirror-mint); background:#ffffff12; }
+.eon-mirror-foot button,.eon-mirror-foot select {
+  border:0; border-radius:1cqw; padding:0 .94cqw; color:var(--mirror-subtle); background:transparent;
+  font:inherit; white-space:nowrap; min-width:0; cursor:pointer;
+}
+.eon-mirror-foot button { display:grid; place-items:center; }
+.eon-mirror-foot button:disabled { opacity:.38; cursor:default; }
+.eon-mirror-foot button:hover:not(:disabled),.eon-mirror-foot select:hover { background:color-mix(in srgb,var(--mirror-ink) 8%,transparent); }
+.eon-mirror-foot :focus-visible { outline:2px solid var(--mirror-mint); outline-offset:-2px; }
+.eon-mirror-foot button svg { width:clamp(10px,2.35cqw,19px); height:auto; }
+.eon-mirror-foot .eon-mirror-phone-link { position:relative; flex:none; width:4.8cqw; height:4.8cqw; padding:0;
+  border:1px solid var(--mirror-border); background:var(--mirror-panel-hi); }
+.eon-mirror-phone-link img { width:78%; height:78%; }
+.eon-mirror-foot .eon-mirror-phone-link svg { position:absolute; right:-.25cqw; bottom:-.25cqw; width:48%;
+  background:var(--mirror-mint); color:var(--mirror-bg); border-radius:3px; padding:1px; }
+.eon-mirror-key-pages { display:flex; align-self:stretch; min-width:0; }
+.eon-mirror-key-pages select { max-width:min(25cqw,160px); text-overflow:ellipsis; color:var(--mirror-mint); font-weight:700; }
+.eon-mirror-key-pages option { color:var(--mirror-ink); background:var(--mirror-panel); }
+
 .eon-mirror-bottom { flex:none; display:flex; align-items:center; gap:12px; color:var(--e-muted); font-size:11px; padding:5px 1px 10px; }
 .eon-mirror-bottom>div:first-child { display:flex; align-items:center; gap:9px; flex:1; min-width:0; }
 .eon-mirror-bottom>div:first-child span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -202,7 +201,7 @@
 .eon-mirror-pages select,.eon-mirror-pages button { min-height:40px; padding:8px 12px; border:1px solid var(--mirror-border); border-radius:10px; background:var(--mirror-panel); color:var(--mirror-ink); font:inherit; display:inline-flex; align-items:center; gap:6px; }
 .eon-mirror-pages select { max-width:min(100%,360px); }
 .eon-mirror-pages button:disabled { opacity:.45; }
-.eon-mirror-pages :focus-visible,.eon-mirror-all-keys button:focus-visible,.eon-mirror-keys-foot button:focus-visible { outline:2px solid var(--mirror-mint); outline-offset:-2px; }
+.eon-mirror-pages :focus-visible,.eon-mirror-all-keys button:focus-visible,.eon-mirror-all-keys:focus-visible { outline:2px solid var(--mirror-mint); outline-offset:-2px; }
 .eon2-app .eon-mirror-display.is-key-page {
   --mirror-content-padding:1.4cqw; --key-ground:#0b1016; --mirror-mint:#dce7ee; --mirror-ink:#f2f5f7;
   --mirror-panel:color-mix(in srgb,var(--key-ground),var(--mirror-mint) 6.5%);
@@ -221,7 +220,8 @@
 .eon-mirror-all-keys {
   --key-radius:2cqw; --key-icon:2.9cqw; --key-gap:.35cqw; --key-label:1.4cqw;
   flex:1; min-height:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr));
-  grid-template-rows:repeat(3,minmax(0,1fr)); gap:.82cqw; padding:0 var(--mirror-content-padding);
+  grid-auto-rows:max(26px, calc((100% - 1.64cqw) / 3)); gap:.82cqw; padding:0 var(--mirror-content-padding);
+  overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
 }
 .eon-mirror-all-keys.is-dense {
   --key-radius:1.64cqw; --key-icon:2.45cqw; --key-gap:.82cqw; --key-label:1.17cqw;
@@ -254,23 +254,9 @@
 .eon-mirror-all-keys.is-dense button:not([data-icon-only],.eon-mirror-shortcut-active) { flex-direction:row; justify-content:flex-start; text-align:left; }
 .eon-mirror-key-lock { position:absolute; top:.58cqw; right:.58cqw; width:1.4cqw; height:1.4cqw; }
 .eon-mirror-keys-notice {
-  grid-area:1 / 1 / -1 / -1; display:grid; place-items:center; border:1px solid var(--mirror-border);
+  grid-area:1 / 1 / span 3 / -1; display:grid; place-items:center; border:1px solid var(--mirror-border);
   border-radius:2.1cqw; background:var(--mirror-panel); font-size:var(--key-label);
 }
-.eon-mirror-keys-foot {
-  flex:0 0 5.95cqw; padding:0 var(--mirror-content-padding) .35cqw; gap:.82cqw;
-  font:500 max(8px,1.4cqw)/1.2 Roboto,system-ui,sans-serif;
-}
-.eon-mirror-keys-foot .eon-mirror-foot-status { font:inherit; gap:.82cqw; }
-.eon-mirror-keys-foot .eon-mirror-foot-status>span:first-child { width:.82cqw; height:.82cqw; }
-.eon-mirror-key-pages { display:flex; align-self:stretch; min-width:0; }
-.eon-mirror-keys-foot button {
-  align-self:stretch; border:0; border-radius:1cqw; padding:0 .94cqw;
-  color:var(--mirror-subtle); background:transparent; font:inherit; white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; cursor:pointer;
-}
-.eon-mirror-keys-foot button:hover { background:color-mix(in srgb,var(--mirror-ink) 8%,transparent); }
-.eon-mirror-keys-foot button[aria-current],.eon-mirror-keys-foot>button { color:var(--mirror-mint); font-weight:700; }
 .eon-mirror button.eon-mirror-shortcut-active { border-color:var(--mirror-mint); }
 .eon-mirror-shortcut-active [role="timer"] { font-variant-numeric:tabular-nums; }
 
