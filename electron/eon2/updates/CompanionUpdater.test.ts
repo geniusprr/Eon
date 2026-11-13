@@ -24,9 +24,9 @@ test('release identity, hashes and package bounds reject wrong tags, packages an
   assert.equal(parseCompanionVersion('Unable to find package'), 0)
 })
 
-test('verified background APK needs separate consent and a genuinely older USB installation', async () => {
+test('verified background APK automatically updates only an older USB installation', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'eon-updates-'))
-  let installed = 1; let installs = 0; let consent = false; let prompts = 0; let downloads = 0
+  let installed = 1; let installs = 0; let downloads = 0
   const fetcher: typeof fetch = async input => {
     const url = String(input)
     if (url.includes('api.github.com')) return Response.json([{ tag_name: 'v2.0.0-preview.3', assets: [{ name: 'eon-update.json' }] }])
@@ -37,13 +37,10 @@ test('verified background APK needs separate consent and a genuinely older USB i
     list: async () => parseAdbDevices('List of devices attached\nUSB123 device model:Test_Phone\n'),
     companionVersion: async () => installed,
     installCompanion: async () => { installs++; installed = 3 },
-  }, true, () => undefined, async () => { prompts++; return consent }, fetcher)
+  }, true, () => undefined, fetcher)
   try {
     await service.check()
     assert.equal(service.status.phase, 'downloaded'); assert.equal(downloads, 1)
-    assert.equal(prompts, 1); assert.equal(installs, 0)
-    await service.check(); assert.equal(prompts, 1); assert.equal(downloads, 1)
-    consent = true; await service.install('USB123')
     assert.equal(installs, 1); assert.equal(service.status.devices[0].needsUpdate, false)
     await service.check(); assert.equal(service.status.phase, 'current')
     assert.equal(installs, 1)
@@ -52,7 +49,7 @@ test('verified background APK needs separate consent and a genuinely older USB i
 
 test('hash failure never offers or installs an APK, and retry recovers without trusting partial data', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'eon-update-corrupt-'))
-  let corrupt = true; let prompted = 0
+  let corrupt = true; let installs = 0
   const fetcher: typeof fetch = async input => {
     const url = String(input)
     if (url.includes('api.github.com')) return Response.json([{ tag_name: 'v2.0.0-preview.3', assets: [{ name: 'eon-update.json' }] }])
@@ -60,11 +57,11 @@ test('hash failure never offers or installs an APK, and retry recovers without t
     return new Response(corrupt ? Buffer.alloc(apk.length) : apk)
   }
   const service = new CompanionUpdater(directory, {
-    list: async () => parseAdbDevices('List of devices attached\nUSB123 device\n'), companionVersion: async () => 1,
-    installCompanion: async () => { assert.fail('No consent was given') },
-  }, true, () => undefined, async () => { prompted++; return false }, fetcher)
+    list: async () => parseAdbDevices('List of devices attached\nUSB123 device\n'), companionVersion: async () => installs ? 3 : 1,
+    installCompanion: async () => { installs++ },
+  }, true, () => undefined, fetcher)
   try {
-    await service.check(); assert.equal(service.status.phase, 'error'); assert.equal(prompted, 0)
-    corrupt = false; await service.check(); assert.equal(service.status.phase, 'downloaded'); assert.equal(prompted, 1)
+    await service.check(); assert.equal(service.status.phase, 'error'); assert.equal(installs, 0)
+    corrupt = false; await service.check(); assert.equal(service.status.phase, 'downloaded'); assert.equal(installs, 1)
   } finally { service.dispose(); await rm(directory, { recursive: true, force: true }) }
 })

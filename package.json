@@ -1,6 +1,6 @@
 {
   "name": "eon",
-  "version": "2.0.0-preview.2",
+  "version": "2.0.0-preview.3",
   "private": true,
   "main": "dist-electron/electron/main.js",
   "description": "Eon — Windows ve Android arasında Deck, notlar, AI, dosya aktarımı ve cihaz kontrolü.",

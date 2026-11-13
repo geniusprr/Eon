@@ -71,6 +71,8 @@
 .eon2-phone-surface.is-compact .eon2-phone-actions { order:3; }
 .eon2-phone-surface.is-compact .eon2-phone-preview { order:4;width:100%;margin:4px 0;gap:6px; }
 .eon2-phone-surface.is-compact .eon2-phone-mode-group { order:5;margin-top:0;gap:5px; }
+.eon2-phone-surface.is-compact .eon2-phone-mode-group,
+.eon2-phone-surface.is-compact .eon2-phone-orientation-group { width:min(100%,320px); align-self:center; }
 .eon2-phone-surface.is-compact .eon2-phone-help { order:6;font-size:10px;line-height:1.4;margin:1px 0 0; }
 .eon2-phone-surface.is-compact .eon2-phone-orientation-group { order:6; }
 .eon2-phone-surface.is-compact .eon2-phone-error,.eon2-phone-surface.is-compact .eon2-phone-info { order:7; }

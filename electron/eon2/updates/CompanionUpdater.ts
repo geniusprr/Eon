@@ -47,10 +47,9 @@ export class CompanionUpdater {
   private installing = false
   private stopped = false
   private readonly abort = new AbortController()
-  private readonly offered = new Set<string>()
+  private rerun = false
   constructor(private readonly directory: string, private readonly adb: Dependencies,
     private readonly preview: boolean, private readonly changed: () => void,
-    private readonly consent: (name: string, version: string) => Promise<boolean>,
     private readonly fetcher: typeof fetch = fetch) {}
 
   private report(patch: Partial<CompanionUpdateStatus>) {
@@ -58,8 +57,14 @@ export class CompanionUpdater {
     this.status = { ...this.status, ...patch }; this.changed()
   }
   private signal() { return AbortSignal.any([this.abort.signal, AbortSignal.timeout(120_000)]) }
+  private checkAgain() {
+    if (!this.rerun || this.busy || this.installing || this.stopped) return
+    this.rerun = false
+    setTimeout(() => { void this.check() }, 0)
+  }
   async check() {
-    if (this.busy || this.installing || this.stopped) return
+    if (this.stopped) return
+    if (this.busy || this.installing) { this.rerun = true; return }
     this.busy = true
     const previousPhase = this.status.phase
     this.report({ phase: 'checking', message: 'Android sürümü denetleniyor' })
@@ -85,8 +90,8 @@ export class CompanionUpdater {
       await this.download(this.release)
       this.report({ phase: 'downloaded', progress: 100, message: 'Telefon güncellemesi kuruluma hazır' })
     } catch { this.report({ phase: 'error', message: 'Telefon güncellemesi alınamadı. Yeniden deneyebilirsin.' }) }
-    finally { this.busy = false }
-    if (this.status.phase === 'downloaded') await this.offer()
+    finally { this.busy = false; this.checkAgain() }
+    if (this.status.phase === 'downloaded') await this.installAvailable()
   }
   private apkPath(release: CompanionRelease) { return path.join(this.directory, `${release.sha256}.apk`) }
   private async verified(release: CompanionRelease): Promise<boolean> {
@@ -146,13 +151,8 @@ export class CompanionUpdater {
       this.report({ devices: [] })
     }
   }
-  private async offer() {
-    const release = this.release
-    if (!release) return
+  private async installAvailable() {
     for (const device of this.status.devices.filter(item => item.needsUpdate)) {
-      const key = `${device.serial}:${release.sha256}`
-      if (this.offered.has(key)) continue
-      this.offered.add(key)
       await this.install(device.serial).catch(() => undefined)
     }
   }
@@ -163,7 +163,7 @@ export class CompanionUpdater {
     if (!device) throw new Error('Güncellenecek USB telefonu bulunamadı.')
     this.installing = true
     try {
-      if (!await this.consent(device.name, release.version) || this.stopped) return
+      if (this.stopped) return
       if (!await this.verified(release)) throw new Error('APK doğrulanamadı. Yeniden indir.')
       const installed = await this.adb.companionVersion(serial)
       if (!installed || installed >= release.versionCode) return
@@ -172,7 +172,7 @@ export class CompanionUpdater {
       if (await this.adb.companionVersion(serial) !== release.versionCode) throw new Error('Telefondaki sürüm doğrulanamadı.')
       this.report({ phase: 'downloaded', message: `${device.name} güncellendi.` })
     } catch { this.report({ phase: 'downloaded', message: 'Telefon kurulamadı. USB bağlantısını ve imza uyumunu kontrol edip tekrar dene.' }) }
-    finally { this.installing = false; await this.scanDevices() }
+    finally { this.installing = false; await this.scanDevices(); this.checkAgain() }
   }
   dispose() { this.stopped = true; this.abort.abort() }
 }

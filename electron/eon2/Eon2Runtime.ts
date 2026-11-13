@@ -26,6 +26,7 @@ import { EonAiService } from './ai/EonAiService.js'
 import { connectOpenRouter } from './ai/OpenRouterOAuth.js'
 import { UpdateManager } from '../UpdateManager.js'
 import { CompanionUpdater } from './updates/CompanionUpdater.js'
+import { CompanionInstaller } from './transport/CompanionInstaller.js'
 import type { UpdateCenterState } from '../../shared/eon-updates.js'
 import { createWindowsShortcut, inspectWindowsApplication } from './agent/WindowsShortcuts.js'
 
@@ -36,6 +37,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   const mobileResources = app.isPackaged ? path.join(process.resourcesPath, 'mobile') : path.join(app.getAppPath(), 'build', 'mobile')
   const adb = new AdbService(app.isPackaged ? path.join(mobileResources, 'adb.exe') : 'adb')
   const companionApk = path.join(mobileResources, 'Eon-Android.apk')
+  const companionInstaller = new CompanionInstaller(adb, companionApk)
   const scrcpy = new ScrcpyManager(adb)
   const storage = path.join(app.getPath('userData'), 'eon-2')
   let companionUpdates: CompanionUpdater | undefined
@@ -242,7 +244,6 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   async function scanUsbDevices() {
     const devices = await adb.list(true)
     const newlyAuthorized = companionSessions.observe(devices)
-    if (newlyAuthorized.length && app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void companionUpdates?.check()
     const connected = devices.filter(device => device.usb && device.state === 'device')
     const serials = new Set(connected.map(device => device.serial))
     for (const serial of previouslyAttached.keys()) if (!serials.has(serial)) {
@@ -266,12 +267,13 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
         usb.detachUsb(serial)
       }
     }
-    // Open only once per authorized physical USB session, including at desktop startup.
-    // Installing, approving pairing and initiating remote control remain explicit actions.
+    // Install the bundled companion only if absent, once per authorized USB session.
     for (const serial of newlyAuthorized) {
       if (closing) return
-      void adb.openCompanion(serial).catch(error => {
-        if (!closing) console.warn('[eon2] Cannot open phone companion', serial, error instanceof Error ? error.message : 'unknown')
+      void companionInstaller.ensure(serial).then(() => {
+        if (!closing && app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void companionUpdates?.check()
+      }).catch(error => {
+        if (!closing) console.warn('[eon2] Cannot prepare phone companion', serial, error instanceof Error ? error.message : 'unknown')
       })
     }
   }
@@ -320,15 +322,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   }
   const updater = new UpdateManager({ getMainWindow: () => mainWindow, reportStatus: updatesChanged,
     beforeInstall: () => windows.allowCloseOnQuit() })
-  companionUpdates = new CompanionUpdater(path.join(storage, 'updates'), adb, app.getVersion().includes('-'), updatesChanged,
-    async (name, version) => {
-      if (mainWindow.isDestroyed()) return false
-      const result = await dialog.showMessageBox(mainWindow, { type: 'question', title: 'Telefon güncellemesi hazır',
-        message: `${name} telefonuna Eon ${version} kurulsun mu?`,
-        detail: 'Yeni sürüm indirildi ve doğrulandı. Kurulum sırasında telefondaki Eon kapanıp yeniden açılır. Notlarını kaydet. Daha sonra Ayarlar → Güncellemeler bölümünden de kurabilirsin.',
-        buttons: ['Daha sonra', 'Telefona kur'], defaultId: 0, cancelId: 0, noLink: true })
-      return result.response === 1
-    })
+  companionUpdates = new CompanionUpdater(path.join(storage, 'updates'), adb, app.getVersion().includes('-'), updatesChanged)
   const checkUpdates = async () => {
     await Promise.all([updater.controller.check(),
       app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1' ? companionUpdates!.check() : Promise.resolve()])
@@ -336,7 +330,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   }
   const updateTimer = setInterval(() => { void checkUpdates() }, 4 * 60 * 60 * 1000)
   updateTimer.unref()
-  if (app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void checkUpdates()
+  if (app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void updater.controller.check()
   ai = new EonAiService({
     dataDir: storage,
     actions,
@@ -542,12 +536,12 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   handle('eon2:updates:install-mobile', async payload => {
     await companionUpdates!.install(readTextField(payload, 'serial', 160)); return updateSnapshot()
   })
-  handle('eon2:mobile:status', async payload => ({
-    installed: await adb.companionInstalled(readTextField(payload, 'serial', 160)),
-    available: fs.existsSync(companionApk),
-  }))
+  handle('eon2:mobile:status', async payload => {
+    const serial = readTextField(payload, 'serial', 160)
+    return { installed: await adb.companionInstalled(serial), available: fs.existsSync(companionApk), progress: companionInstaller.status(serial) }
+  })
   handle('eon2:mobile:install', async payload => {
-    await adb.installCompanion(readTextField(payload, 'serial', 160), companionApk)
+    await companionInstaller.ensure(readTextField(payload, 'serial', 160))
     return { installed: true }
   })
   handle('eon2:mobile:install-apk', async payload => {

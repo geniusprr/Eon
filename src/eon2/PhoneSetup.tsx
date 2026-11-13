@@ -4,7 +4,7 @@ import { Cable, Download, Link2, Smartphone, X } from 'lucide-react'
 const steps = [
   { icon: Smartphone, title: 'USB hata ayıklamayı aç', detail: 'Android’de Ayarlar → Telefon hakkında bölümünde Derleme numarasına yedi kez dokun. Geliştirici seçeneklerinden USB hata ayıklamayı aç.' },
   { icon: Cable, title: 'Telefonu USB ile bağla', detail: 'Bir USB veri kablosu kullan. Telefonunun kilidini aç ve bu bilgisayar için USB hata ayıklama iznini onayla.' },
-  { icon: Link2, title: 'Eon’u kur ve eşleştir', detail: 'Eon iki cihazda da açıkken birinden Eşleştir’e dokun. İsteği karşı cihazda kabul et.' },
+  { icon: Link2, title: 'Eon’u eşleştir', detail: 'Eon telefonda yüklü değilse otomatik kurulur. Telefonundaki kurulum isteğini onayla, ardından Eşleştir’e dokun.' },
 ]
 
 export function PhoneSetupGuide({ onClose, onDevices }: { onClose: () => void; onDevices: () => void }) {
@@ -24,7 +24,7 @@ export function PhoneSetupGuide({ onClose, onDevices }: { onClose: () => void; o
   </dialog>
 }
 
-type InstallState = { installed: boolean; available: boolean }
+type InstallState = { installed: boolean; available: boolean; progress?: { phase: 'checking' | 'installing' | 'error'; message?: string } | null }
 
 export function PhoneInstall({ serial }: { serial: string }) {
   const [status, setStatus] = useState<InstallState | null>(null)
@@ -43,7 +43,7 @@ export function PhoneInstall({ serial }: { serial: string }) {
       }
     }
     void check()
-    const timer = window.setInterval(() => { if (!document.hidden && !busy) void check() }, 8000)
+    const timer = window.setInterval(() => { if (!document.hidden && !busy) void check() }, 2000)
     return () => { alive = false; clearInterval(timer) }
   }, [serial, busy])
 
@@ -61,11 +61,14 @@ export function PhoneInstall({ serial }: { serial: string }) {
     } finally { setBusy(false) }
   }
 
-  if ((!status || status.installed) && !message && !busy) return null
+  if ((!status || status.installed) && !message && !busy && !status?.progress) return null
+  const preparing = busy || status?.progress?.phase === 'checking' || status?.progress?.phase === 'installing'
   return <div className="eon2-phone-install" aria-live="polite">
     {message && <span>{message}</span>}
-    {status && !status.installed && <button type="button" className="eon2-button eon2-button--primary" disabled={busy || !status.available} onClick={() => void install()}>
-      <Download size={15} aria-hidden="true"/>{busy ? 'Eon kuruluyor…' : 'Eon’u kur'}
+    {!message && status?.progress?.phase === 'error' && <span>Otomatik kurulum tamamlanamadı: {status.progress.message} Telefonun kilidini ve kurulum iznini kontrol edip tekrar dene.</span>}
+    {preparing && <span>Eon hazırlanıyor. Telefonundaki kurulum isteğini onayla.</span>}
+    {status && (!status.installed || status.progress?.phase === 'error') && <button type="button" className="eon2-button eon2-button--primary" disabled={preparing || (!status.installed && !status.available)} onClick={() => void install()}>
+      <Download size={15} aria-hidden="true"/>{preparing ? 'Eon hazırlanıyor…' : 'Tekrar dene'}
     </button>}
     {status && !status.available && !status.installed && <small>Bu masaüstü derlemesinde Android paketi yok.</small>}
   </div>

@@ -7,7 +7,7 @@ Eon `2.0.0-preview.2` ile başlayan sürümlerde Windows ve Android, `geniusprr/
 - Uygulama açılışında ve çalışırken dört saatte bir yayın denetlenir. Ayarlar → Güncellemeler → Denetle ile elle de başlatılabilir.
 - Windows installer arka planda indirilir; başlık çubuğundaki küçük düğme yalnızca bilinen güncelleme olduğunda görünür. Düğme Ayarlar'daki Güncellemeler bölümünü açıp odaklar.
 - Kullanıcı **Yeniden başlat ve kur** → **Kaydettim, kur** seçmeden kurulum başlamaz. Uygulamayı normal kapatmak indirilen sürümü otomatik kurmaz.
-- USB ile bağlı, yetkilendirilmiş ve eski Eon companion sürümü kurulu telefon varsa APK arka planda hazırlanır. Masaüstü, telefon adı ve sürümünü belirterek **Daha sonra / Telefona kur** onayı ister. Reddetmek APK'yı silmez; Ayarlar'dan sonra da kurulabilir.
+- USB ile bağlı, yetkilendirilmiş telefonda Eon yoksa masaüstü paketindeki companion kurulur. Daha eski bir sürüm varsa daha yeni paket otomatik kurulur; telefonun istediği USB veya kurulum izinleri kullanıcı tarafından onaylanmalıdır. Yayından indirilen APK kurulumdan önce doğrulanır.
 - Telefona ADB üzerinden kurulum yalnızca USB'de yapılır. Tailscale üzerinden ADB açılmaz. Telefon bağımsız olarak aynı yayını HTTPS ile indirebilir; Ayarlar → Güncellemeler → Yeni sürümü kur Android'in paket kurucusunu açar. Gerekirse Android, Eon için bu kaynaktan uygulama yükleme izni ister.
 - APK boyutu ve SHA-256 özeti doğrulanır. Android'in kendi kurulum yolunda paket kimliği, sürüm kodu ve mevcut APK imzası da karşılaştırılır. USB kurulumunda Android paket yöneticisi imza uyumunu denetler. Hiçbir hata üzerine mevcut uygulama otomatik kaldırılmaz.
 - Kesilen/bozuk APK hazır durumuna geçmez; yeniden denetleme ile yeniden indirilir. Tamamlanan doğrulanmış APK önbellekten tekrar kullanılabilir. İndirme uygulama sürecinde çalışır; işletim sistemi süreci sonlandırırsa sonraki açılışta tekrar denenir.
@@ -46,6 +46,6 @@ Kullanıcının 13 Kasım 2026 onayıyla mevcut geliştirme imza anahtarı Eon d
 
 ## Doğrulama kapsamı
 
-Odaklı testler: eşzamanlı indirme koruması, yeniden deneme, kuruluma hazır olma koşulu, açık kurulum eylemi, ayrı telefon onayı, hash/kimlik/boyut reddi, kurulu sürüm karşılaştırması ve IPC sınırı. Electron UI smoke, başlık düğmesinin gizlenmesini, ilerlemeyi, Ayarlar'a geçişi, native onay diyaloğunu, iptali, beş pencere genişliğini ve açık temayı izole profilde denetler. Smoke içindeki installer çalıştırma çağrısı mock'tur; gerçek Windows kurulumunun kanıtı değildir.
+Odaklı testler: eşzamanlı indirme koruması, yeniden deneme, otomatik telefon kurulumu, hash/kimlik/boyut reddi, kurulu sürüm karşılaştırması ve IPC sınırı. Electron UI smoke, başlık düğmesinin gizlenmesini, ilerlemeyi, Ayarlar'a geçişi, Windows kurulum onayını, iptali, beş pencere genişliğini ve açık temayı izole profilde denetler. Smoke içindeki installer çalıştırma çağrısı mock'tur; gerçek Windows kurulumunun kanıtı değildir.
 
 Android birim testleri manifest kimliği/etiketi, paket, hash ve boyut doğrulamasını kapsar. Fiziksel cihazda gelecekteki daha yeni bir yayının uçtan uca kurulması ayrıca kabul edilmelidir. Windows Authenticode imzası, Android üretim imzası veya Play Store dağıtımı bu ön sürümün kapsamında tamamlanmış sayılmaz.
