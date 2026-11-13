@@ -53,3 +53,13 @@ test('transfer access does not expose legacy execution or browser capabilities',
   }
   assert.equal(calls.length, 0)
 })
+
+test('update center forwards only bounded update operations, not arbitrary downloads or execution', async () => {
+  const { bridge, calls } = fixture()
+  for (const channel of ['eon2:updates:get', 'eon2:updates:check', 'eon2:updates:download',
+    'eon2:updates:install', 'eon2:updates:install-mobile'] satisfies IpcChannel[]) {
+    await bridge.invoke(channel, channel.endsWith('install-mobile') ? { serial: 'USB123' } : undefined)
+    assert.equal(calls.at(-1)?.channel, channel)
+  }
+  await assert.rejects(bridge.invoke('launch-program', { path: 'downloaded.exe' }), /IPC capability denied/)
+})

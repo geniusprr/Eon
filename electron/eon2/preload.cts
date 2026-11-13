@@ -9,6 +9,7 @@ const channels = new Set<string>([
   'window:minimize', 'window:toggle-maximize', 'window:is-maximized', 'window:close', 'window:show',
   'eon2:system-snapshot', 'eon2:deck:get', 'eon2:deck:layout:get', 'eon2:deck:layout:set', 'eon2:deck:execute', 'eon2:devices', 'eon2:paired-devices',
   'eon2:mobile:status', 'eon2:mobile:install', 'eon2:mobile:install-apk',
+  'eon2:updates:get', 'eon2:updates:check', 'eon2:updates:download', 'eon2:updates:install', 'eon2:updates:install-mobile',
   'eon2:theme:set',
   'eon2:settings:get', 'eon2:settings:set', 'eon2:settings:import', 'eon2:settings:export', 'eon2:files:drop', 'eon2:actions:drop', 'eon2:pairing:state',
   'eon2:actions:list', 'eon2:actions:save', 'eon2:actions:delete', 'eon2:actions:execute', 'eon2:actions:pick-app',
@@ -35,7 +36,7 @@ const bridge: ElectronDesktopBridge = {
     return ipcRenderer.invoke(channel, payload)
   },
   on(event: DesktopEventName, listener: (payload: unknown) => void) {
-    if (event !== 'eon2:scrcpy:changed' && event !== 'eon2:ai:navigate' && event !== 'eon2:theme:changed') throw new Error('Eon 2 olayına erişim reddedildi.')
+    if (event !== 'eon2:scrcpy:changed' && event !== 'eon2:ai:navigate' && event !== 'eon2:theme:changed' && event !== 'eon2:updates:changed') throw new Error('Eon 2 olayına erişim reddedildi.')
     const callback = (_event: Electron.IpcRendererEvent, payload: unknown) => listener(payload)
     ipcRenderer.on(event, callback)
     return () => { ipcRenderer.off(event, callback) }

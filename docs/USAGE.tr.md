@@ -1,13 +1,13 @@
 # Eon 2 kullanım rehberi
 
-Bu rehber **v2.0.0-preview.1** içindir. [İndirme sayfası](https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.1) · [Tanıtıma dön](../README.md)
+Bu rehber **v2.0.0-preview.2** içindir. [İndirme sayfası](https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.2) · [Tanıtıma dön](../README.md)
 
 ## 1. Windows kurulumu
 
-`Eon-Setup-2.0.0-preview.1.exe` dosyasını indir, kurulum dizinini seç ve Eon'u aç. Node.js, Android Studio veya ayrı scrcpy kurulumu son kullanıcı için gerekmez; gerekli cihaz araçları Windows paketine dahildir. Windows 10/11 x64 hedeflenir. Kurulum kod imzasız olduğundan SmartScreen uyarısı çıkabilir; yayın kaynağını ve `SHA256SUMS.txt` dosyasını kontrol et.
+`Eon-Setup-2.0.0-preview.2.exe` dosyasını indir, kurulum dizinini seç ve Eon'u aç. Node.js, Android Studio veya ayrı scrcpy kurulumu son kullanıcı için gerekmez; gerekli cihaz araçları Windows paketine dahildir. Windows 10/11 x64 hedeflenir. Kurulum kod imzasız olduğundan SmartScreen uyarısı çıkabilir; yayın kaynağını ve `SHA256SUMS.txt` dosyasını kontrol et.
 
 ```powershell
-Get-FileHash .\Eon-Setup-2.0.0-preview.1.exe -Algorithm SHA256
+Get-FileHash .\Eon-Setup-2.0.0-preview.2.exe -Algorithm SHA256
 ```
 
 Telefon bağlamadan notlarını ve Dashboard'u kullanabilirsin. Eon AI için ayrıca internet ve OpenRouter yapılandırması gerekir.
@@ -76,3 +76,11 @@ Ayarlar'dan tema ile Cam / Sistem / Opak yüzey seç. **Windows ile aç** oturum
 | Cihaz bağlantısı başlatılamadı | Başka Eon örneğini kapatıp yeniden aç; portu internete açma |
 
 [Doğrulanan kontroller ve açık sınırlar](eon2/RELEASE-20261113.md). Hata bildirirken sürüm, işletim sistemi, bağlantı türü ve tekrar adımlarını ekle.
+
+## 10. Güncellemeler
+
+Yeni sürüm arka planda indirilir. Başlık çubuğundaki güncelleme düğmesi yalnızca güncelleme bulunduğunda görünür ve Ayarlar → Güncellemeler bölümünü açar. Kurmak istediğinde Yeniden başlat ve kur seçeneğini kullan; açık notlarını kaydetmeden onaylama.
+
+USB bağlı telefon için masaüstü ayrıca izin ister. Daha sonra seçersen Ayarlar’dan Telefona kur düğmesiyle devam edebilirsin. Mobil uygulamada Ayarlar → Güncellemeler → Yeni sürümü kur Android’in onaylı paket kurulumunu açar.
+
+preview.1’den ilk geçişte preview.2 Windows installer’ını ve APK’sını bir defa elle kurmak gerekir. Sonraki uygun yayınlar uygulama içinden alınır. [Akış ve yayın ayrıntıları](eon2/UPDATES.md).

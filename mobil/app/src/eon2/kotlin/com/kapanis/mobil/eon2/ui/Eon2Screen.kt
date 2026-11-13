@@ -109,6 +109,8 @@ import com.kapanis.mobil.eon2.network.EonPeerStatus
 import com.kapanis.mobil.eon2.network.EonUsbClient
 import com.kapanis.mobil.eon2.network.UsbPrompt
 import com.kapanis.mobil.eon2.network.DesktopSettings
+import com.kapanis.mobil.eon2.network.ReleaseUpdater
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kapanis.mobil.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -150,6 +152,9 @@ private fun Context.eonActivity(): Activity? {
 @Composable
 fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
     val context = LocalContext.current
+    val updater = remember { ReleaseUpdater.get(context) }
+    val updateState by updater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(updater) { updater.check() }
     val activity = remember(context) { context.eonActivity() }
     val landscape by rememberUpdatedState(LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
     val store = remember { EonNotesRepository.shared(context.applicationContext) }
@@ -408,6 +413,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                     Image(painterResource(R.drawable.eon_launcher_foreground), "Eon logosu", modifier = Modifier.fillMaxSize())
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    UpdateBadge(updateState) { if (tab != EonTab.Settings) lastMainTab = tab; tab = EonTab.Settings }
                     Surface(modifier = Modifier.eonGlass(RoundedCornerShape(20.dp)), color = Color.Transparent,
                         shape = RoundedCornerShape(20.dp)) {
                         Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -499,6 +505,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
             })
             EonTab.Settings -> Column(contentModifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).padding(bottom = bottomClearance), verticalArrangement=Arrangement.spacedBy(16.dp)) {
                 Text("Ayarlar", style=MaterialTheme.typography.headlineLarge)
+                UpdateSettings(updater, updateState)
                 EonAppearancePicker(theme, !settingsBusy) { updateSetting("theme", it) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                 Text("Bağlantı ve eşitleme", style = MaterialTheme.typography.titleLarge)

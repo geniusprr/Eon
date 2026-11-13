@@ -29,3 +29,8 @@ jobs:
         run: |
           $process = Start-Process node_modules/electron/dist/electron.exe -ArgumentList 'electron/eon2/deck-mirror-smoke.cjs' -Wait -PassThru -WindowStyle Hidden
           exit $process.ExitCode
+      - name: Eon 2 update center smoke
+        shell: pwsh
+        run: |
+          $process = Start-Process node_modules/electron/dist/electron.exe -ArgumentList 'electron/eon2/updates/updates-smoke.cjs' -Wait -PassThru -WindowStyle Hidden
+          exit $process.ExitCode

@@ -26,8 +26,8 @@ android {
         applicationId = "com.kapanis.mobil"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "2.0.0-preview.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,7 +36,6 @@ android {
         debug {
             // Keep the original Eon Android installation and user data untouched.
             applicationIdSuffix = ".eon2.dev"
-            versionNameSuffix = "-eon2"
         }
         release {
             isMinifyEnabled = false

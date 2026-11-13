@@ -8,6 +8,12 @@ const execFileAsync = promisify(execFile)
 const DEVICE_SERIAL = /^[A-Za-z0-9._:-]{1,160}$/
 const MAX_STDOUT_BYTES = 128 * 1024
 
+export function parseCompanionVersion(output: string): number {
+  const match = output.match(/\bversionCode=(\d+)\b/)
+  const code = match ? Number(match[1]) : 0
+  return Number.isSafeInteger(code) && code > 0 ? code : 0
+}
+
 /** Prefer the platform-tools shipped alongside the Android companion in packaged Eon. */
 export function resolveAdbBinary(resourcesPath?: string): string {
   const configured = process.env.EON_ADB_PATH
@@ -107,6 +113,14 @@ export class AdbService {
       windowsHide: true, timeout: 5000, maxBuffer: MAX_STDOUT_BYTES,
     })
     return stdout.split(/\r?\n/).some(line => line.trim() === 'package:com.kapanis.mobil.eon2.dev')
+  }
+
+  async companionVersion(serial: string): Promise<number> {
+    await this.requireUsbDevice(serial)
+    const { stdout } = await execFileAsync(this.binary, ['-s', serial, 'shell', 'dumpsys', 'package', 'com.kapanis.mobil.eon2.dev'], {
+      windowsHide: true, timeout: 5000, maxBuffer: MAX_STDOUT_BYTES,
+    })
+    return parseCompanionVersion(stdout)
   }
 
   async openCompanion(serial: string): Promise<void> {

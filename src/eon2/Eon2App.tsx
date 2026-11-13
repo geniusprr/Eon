@@ -10,6 +10,7 @@ import { ActionsPane, TransfersPane } from './ControlsPane'
 import { APP_THEME_STORAGE_KEY, isAppTheme, type AppTheme } from '../theme'
 import { EonLogo } from '../components/brand/EonLogo'
 import { DeckMirror } from './DeckMirror'
+import { useUpdates, UpdateTitleButton, UpdatesPanel } from './Updates'
 import { EonAiHome, EonAiSettings, EonAiWorkspace, useEonAiController } from './EonAi'
 import './eon2.css'
 import './eon-glass.css'
@@ -94,7 +95,15 @@ function Preferences({ theme, settings, onChange, error, material, onMaterialCha
 }
 
 export function Eon2App() {
+  const updates = useUpdates()
+  const [focusUpdates, setFocusUpdates] = useState(false)
   const [section, setSection] = useState<Section>('dashboard')
+  useEffect(() => {
+    if (section === 'settings' && focusUpdates) {
+      document.getElementById('eon-updates-heading')?.focus()
+      setFocusUpdates(false)
+    }
+  }, [section, focusUpdates])
   const ai = useEonAiController()
   const [notesActivated, setNotesActivated] = useState(false)
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null)
@@ -259,6 +268,7 @@ export function Eon2App() {
     </aside>
     <div className="eon2-main"><header className="eon2-topbar" aria-label="Pencere başlığı">
       <div className="eon2-title-context"><SectionIcon aria-hidden="true" size={20} strokeWidth={1.7}/><span>{title}</span></div>
+      <UpdateTitleButton updates={updates} onOpen={() => { setSection('settings'); setFocusUpdates(true) }}/>
       <button type="button" className="eon2-title-connection" onClick={() => setSection('devices')} title={connectionLabel} aria-label={`${connectionLabel}. Cihazlar bölümünü aç`}>
         <span aria-hidden="true" className={`eon2-title-status-dot ${deviceConnected ? 'is-connected' : ''}`}/><span className="eon2-title-status-label">{connectionLabel}</span>
       </button>
@@ -274,7 +284,7 @@ export function Eon2App() {
         {section === 'devices' && <DevicesPane devices={devices} error={deviceError} refreshing={deviceRefreshing} refresh={() => { void refreshDevices() }} serverReady={deviceResult?.serverReady} tunnelledSerials={deviceResult?.tunnelledSerials}/>}
         {section === 'automations' && <ActionsPane droppedPaths={dropped?.destination === 'automations' ? dropped.paths : undefined} clearDrop={clearDrop}/>}
         {section === 'transfers' && <TransfersPane droppedPaths={dropped?.destination === 'transfers' ? dropped.paths : undefined} clearDrop={clearDrop}/>}
-        {section === 'settings' && <><Preferences theme={theme} settings={settings} error={settingsError} onChange={(key, value) => void updateSettings(key, value)} material={material} onMaterialChange={updateMaterial}/><button type="button" className="eon2-button eon2-button--outline" onClick={() => setShowPhoneGuide(true)}>Telefon bağlama rehberi</button></>}
+        {section === 'settings' && <><Preferences theme={theme} settings={settings} error={settingsError} onChange={(key, value) => void updateSettings(key, value)} material={material} onMaterialChange={updateMaterial}/><UpdatesPanel updates={updates}/><button type="button" className="eon2-button eon2-button--outline" onClick={() => setShowPhoneGuide(true)}>Telefon bağlama rehberi</button></>}
       </main>
     </div>
     <FileDropTargets onDrop={onFileDrop} onError={setDropError}/>

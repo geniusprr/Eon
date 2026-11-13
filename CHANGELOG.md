@@ -1,5 +1,15 @@
 # Değişiklikler
 
+## 2.0.0-preview.2 — 2026-11-13
+
+- Windows ve Android için GitHub Releases tabanlı arka plan güncelleme akışı.
+- Yalnızca güncelleme bulunduğunda görünen başlık çubuğu durumu ve Ayarlar → Güncellemeler.
+- Windows'ta kullanıcı seçene kadar bekleyen kurulum; ayrı telefon onayıyla USB APK güncellemesi.
+- Android'de doğrulanan APK ve sistem paket kurucusuyla kullanıcı onaylı kurulum.
+- Yayın manifesti, artan Android sürüm kodu ve CI'da aynı companion imzasının korunması.
+
+İlk preview.1 → preview.2 geçişi bir defa elle kurulum gerektirir. [Kullanım ve yayın sözleşmesi](docs/eon2/UPDATES.md).
+
 ## 2.0.0-preview.1 — 2026-11-13
 
 Eon 2'nin ilk ön sürümü. Kararlı sürüm veya imzalı üretim dağıtımı değildir.

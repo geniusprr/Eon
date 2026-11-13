@@ -24,6 +24,15 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+      - name: Restore consistent Android update signing identity
+        shell: pwsh
+        env:
+          EON_ANDROID_UPDATE_KEYSTORE_B64: ${{ secrets.EON_ANDROID_UPDATE_KEYSTORE_B64 }}
+        run: |
+          if (-not $env:EON_ANDROID_UPDATE_KEYSTORE_B64) { throw 'Configure EON_ANDROID_UPDATE_KEYSTORE_B64 with the existing companion signing keystore. A fresh debug key would break updates.' }
+          $directory = Join-Path $env:USERPROFILE '.android'
+          New-Item -ItemType Directory -Force $directory | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $directory 'debug.keystore'), [Convert]::FromBase64String($env:EON_ANDROID_UPDATE_KEYSTORE_B64))
       - name: Install Android SDK
         shell: pwsh
         run: sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'platform-tools'
@@ -50,11 +59,6 @@ jobs:
         run: npm run dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Stage companion and checksums
-        shell: pwsh
-        run: |
-          Copy-Item build/mobile/Eon-Android.apk release/Eon-Android-preview.apk
-          Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|apk|blockmap)$' -or $_.Name -match '^(latest|preview)\.yml$' } | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" } | Set-Content release/SHA256SUMS.txt -Encoding ascii
       - name: Prepare release for review
         uses: softprops/action-gh-release@v2
         with:
@@ -65,6 +69,7 @@ jobs:
             release/preview.yml
             release/*.apk
             release/SHA256SUMS.txt
+            release/eon-update.json
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true

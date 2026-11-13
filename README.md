@@ -4,12 +4,12 @@
   <p><strong>Bilgisayarın ve telefonun. Aynı çalışma alanı.</strong></p>
   <p>Kişiselleştirilebilir Deck, bağlantılı notlar, Eon AI ve cihaz kontrolü.</p>
   <p>Windows x64 · Android 8.0+ · Türkçe · Açık kaynak</p>
-  <p><a href="https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.1"><strong>Eon 2 ön sürümünü indir</strong></a> · <a href="docs/USAGE.tr.md">Kullanım rehberi</a> · <a href="#geliştirme">Geliştirme</a></p>
+  <p><a href="https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.2"><strong>Eon 2 ön sürümünü indir</strong></a> · <a href="docs/USAGE.tr.md">Kullanım rehberi</a> · <a href="#geliştirme">Geliştirme</a></p>
 </div>
 
 ![Eon 2 Dashboard](docs/images/eon2-dashboard.png)
 
-> **v2.0.0-preview.1 — Eon 2'nin ilk ön sürümü.** Bu bir kararlı sürüm değildir. Windows paketi kod imzasızdır; Android companion geliştirme anahtarıyla imzalanmıştır. Önceki v1 yayınları korunur. [Doğrulama ve sınırlar](docs/eon2/RELEASE-20261113.md).
+> **v2.0.0-preview.2 — Arka planda güncellemeler.** Bu bir kararlı sürüm değildir. Windows paketi kod imzasızdır; Android companion geliştirme anahtarıyla imzalanmıştır. Önceki v1 yayınları korunur. [Doğrulama ve sınırlar](docs/eon2/RELEASE-20261113.md).
 
 ## Eon ile neler yapabilirsin?
 
@@ -58,7 +58,7 @@ Obsidian, Okyanus, Mor aurora, Gün batımı ve Aydınlık temaları arasından 
 
 ## İndir ve başla
 
-1. [Eon 2 ön sürüm sayfasından](https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.1) `Eon-Setup-2.0.0-preview.1.exe` dosyasını indir ve kur. Windows 10/11 x64 gerekir.
+1. [Eon 2 ön sürüm sayfasından](https://github.com/geniusprr/Eon/releases/tag/v2.0.0-preview.2) `Eon-Setup-2.0.0-preview.2.exe` dosyasını indir ve kur. Windows 10/11 x64 gerekir.
 2. Eon'u aç. Telefon olmadan Dashboard, yerel notlar ve ayarlarla başlayabilirsin.
 3. Telefonda geliştirici seçeneklerinden **USB hata ayıklama**yı aç; veri kablosuyla bağla ve bilgisayarın hata ayıklama isteğini telefonda onayla.
 4. Eon → **Cihazlar** bölümünden **Eon'u kur** seçeneğini kullan. Alternatif olarak yayındaki `Eon-Android-preview.apk` dosyasını telefona kur.

@@ -106,7 +106,7 @@ export const APP_EVENTS = {
 } as const
 
 export type AppEventName = (typeof APP_EVENTS)[keyof typeof APP_EVENTS]
-export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed' | 'eon2:ai:navigate' | 'eon2:theme:changed'
+export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed' | 'eon2:ai:navigate' | 'eon2:theme:changed' | 'eon2:updates:changed'
 
 export interface BrowserBounds {
   x: number
@@ -492,6 +492,11 @@ export type IpcChannel =
   | 'eon2:permissions:set'
   | 'eon2:devices'
   | 'eon2:mobile:status'
+  | 'eon2:updates:get'
+  | 'eon2:updates:check'
+  | 'eon2:updates:download'
+  | 'eon2:updates:install'
+  | 'eon2:updates:install-mobile'
   | 'eon2:mobile:install'
   | 'eon2:mobile:install-apk'
   | 'eon2:paired-devices'

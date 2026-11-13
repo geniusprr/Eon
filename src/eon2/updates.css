@@ -1,0 +1,15 @@
+.eon-update-title { -webkit-app-region: no-drag; position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--eon-border, #8797aa55); border-radius: 12px; color: inherit; background: #8797aa15; cursor: pointer; font: inherit; font-size: 12px; }
+.eon-update-title-progress { position: absolute; bottom: 0; left: 0; height: 2px; background: currentColor; opacity: .6; }
+.eon-updates { margin-block: 24px; padding: 24px; border: 1px solid #8797aa40; border-radius: 20px; background: #8797aa0d; }
+.eon-updates header, .eon-update-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.eon-updates h2 { margin: 0; font-size: 19px; }
+.eon-updates p { margin: 8px 0; font-size: 13px; opacity: .8; }
+.eon-update-row { padding-block: 18px; border-bottom: 1px solid #8797aa30; }
+.eon-update-row strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.eon-update-row small, .eon-updates > small { opacity: .7; font-weight: 400; }
+.eon-updates > small { display: block; margin-top: 16px; }
+.eon-updates progress { display: block; width: min(300px, 60vw); height: 5px; accent-color: #a7c5eb; margin-top: 12px; }
+.eon-update-confirm { width: min(460px, calc(100vw - 48px)); padding: 28px; background: var(--e-panel); color: var(--e-text); border: 1px solid var(--e-panel-border); border-radius: 24px; }
+.eon-update-confirm::backdrop { background: #0009; backdrop-filter: blur(12px); }
+.eon-update-confirm > div { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+@media (max-width: 760px) { .eon-update-title span:not(.eon-update-title-progress) { display: none; } .eon-updates { padding: 18px; } }

@@ -24,6 +24,9 @@ import { TailscaleDetector, type TailnetStatus } from './transport/TailscaleDete
 import { DeckLayoutConflictError, DeckLayoutStore } from './deck/DeckLayoutStore.js'
 import { EonAiService } from './ai/EonAiService.js'
 import { connectOpenRouter } from './ai/OpenRouterOAuth.js'
+import { UpdateManager } from '../UpdateManager.js'
+import { CompanionUpdater } from './updates/CompanionUpdater.js'
+import type { UpdateCenterState } from '../../shared/eon-updates.js'
 import { createWindowsShortcut, inspectWindowsApplication } from './agent/WindowsShortcuts.js'
 
 /** Minimal Eon 2 process: it starts no browser, LibreChat, Supabase or LAN service. */
@@ -35,6 +38,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   const companionApk = path.join(mobileResources, 'Eon-Android.apk')
   const scrcpy = new ScrcpyManager(adb)
   const storage = path.join(app.getPath('userData'), 'eon-2')
+  let companionUpdates: CompanionUpdater | undefined
   const tailnetSettingsPath = path.join(storage, 'tailnet-settings.json')
   const themePath = path.join(storage, 'theme.json')
   const loginArgs = app.isPackaged ? ['--background'] : [`"${app.getAppPath()}"`, '--background']
@@ -238,6 +242,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   async function scanUsbDevices() {
     const devices = await adb.list(true)
     const newlyAuthorized = companionSessions.observe(devices)
+    if (newlyAuthorized.length && app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void companionUpdates?.check()
     const connected = devices.filter(device => device.usb && device.state === 'device')
     const serials = new Set(connected.map(device => device.serial))
     for (const serial of previouslyAttached.keys()) if (!serials.has(serial)) {
@@ -308,6 +313,30 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     })
   }
   const contents = mainWindow.webContents
+  const updateSnapshot = (): UpdateCenterState => ({ desktop: updater.controller.status,
+    mobile: companionUpdates!.status })
+  const updatesChanged = () => {
+    if (companionUpdates && !contents.isDestroyed()) contents.send('eon2:updates:changed', updateSnapshot())
+  }
+  const updater = new UpdateManager({ getMainWindow: () => mainWindow, reportStatus: updatesChanged,
+    beforeInstall: () => windows.allowCloseOnQuit() })
+  companionUpdates = new CompanionUpdater(path.join(storage, 'updates'), adb, app.getVersion().includes('-'), updatesChanged,
+    async (name, version) => {
+      if (mainWindow.isDestroyed()) return false
+      const result = await dialog.showMessageBox(mainWindow, { type: 'question', title: 'Telefon güncellemesi hazır',
+        message: `${name} telefonuna Eon ${version} kurulsun mu?`,
+        detail: 'Yeni sürüm indirildi ve doğrulandı. Kurulum sırasında telefondaki Eon kapanıp yeniden açılır. Notlarını kaydet. Daha sonra Ayarlar → Güncellemeler bölümünden de kurabilirsin.',
+        buttons: ['Daha sonra', 'Telefona kur'], defaultId: 0, cancelId: 0, noLink: true })
+      return result.response === 1
+    })
+  const checkUpdates = async () => {
+    await Promise.all([updater.controller.check(),
+      app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1' ? companionUpdates!.check() : Promise.resolve()])
+    return updateSnapshot()
+  }
+  const updateTimer = setInterval(() => { void checkUpdates() }, 4 * 60 * 60 * 1000)
+  updateTimer.unref()
+  if (app.isPackaged && process.env.KAPANIS_SMOKE_TEST !== '1') void checkUpdates()
   ai = new EonAiService({
     dataDir: storage,
     actions,
@@ -506,6 +535,13 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return { devices, scannedAt: Date.now(), transport: 'usb' as const, serverReady: usbReady, tunnelledSerials: [...previouslyAttached.keys()] }
   })
   handle('eon2:paired-devices', () => usb.listDevices())
+  handle('eon2:updates:get', () => updateSnapshot())
+  handle('eon2:updates:check', () => checkUpdates())
+  handle('eon2:updates:download', async () => { await updater.controller.download(); return updateSnapshot() })
+  handle('eon2:updates:install', () => updater.controller.install())
+  handle('eon2:updates:install-mobile', async payload => {
+    await companionUpdates!.install(readTextField(payload, 'serial', 160)); return updateSnapshot()
+  })
   handle('eon2:mobile:status', async payload => ({
     installed: await adb.companionInstalled(readTextField(payload, 'serial', 160)),
     available: fs.existsSync(companionApk),
@@ -628,6 +664,10 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     windows,
     close() {
       closing = true
+      clearInterval(updateTimer)
+      updater.dispose()
+      companionUpdates?.dispose()
+      for (const channel of ['eon2:updates:get', 'eon2:updates:check', 'eon2:updates:download', 'eon2:updates:install', 'eon2:updates:install-mobile']) ipcMain.removeHandler(channel)
       clearInterval(attachInterval)
       clearInterval(tailnetInterval)
       scrcpy.dispose()
