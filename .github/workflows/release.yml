@@ -1,6 +1,7 @@
 name: Windows release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -24,6 +25,8 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Restore consistent Android update signing identity
         shell: pwsh
         env:
@@ -60,6 +63,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Prepare release for review
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -73,3 +77,16 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
+      - name: Retain verified packages from manual build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eon-verified-release-packages
+          path: |
+            release/Eon-Setup-*.exe
+            release/Eon-Setup-*.blockmap
+            release/Eon-Android-preview.apk
+            release/latest.yml
+            release/eon-update.json
+            release/SHA256SUMS.txt
+          retention-days: 7

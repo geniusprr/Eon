@@ -17,6 +17,9 @@ Mevcut electron-updater/NSIS altyapısı, arka planda indirme ve yalnızca açı
 - Android manifest testleri geçerli release kimliğini, paket/tag uyuşmazlığını, hash ve boyut sınırlarını denetler. USB cihazı `V2205` yetkili olarak görüldü; mevcut companion versionCode=1 idi. Bu oturumda telefondaki uygulama silinmedi ve gelecekteki daha yeni sürüme fiziksel OTA kurulumu iddia edilmez.
 - Kullanıcının açık onayıyla mevcut companion keystore'u `EON_ANDROID_UPDATE_KEYSTORE_B64` GitHub repository secret'ına yazıldı; yalnızca secret adı/kayıt zamanı doğrulandı. Anahtar kaynaklara ve loglara eklenmedi.
 - `npm run dist`: çıkış 0; Android ve tam scrcpy staging, NSIS paketleme, `eon-update.json` ve SHA256SUMS üretimi birlikte tamamlandı. Paketlenmiş app.asar sürümü `2.0.0-preview.2`; installer 157.476.332 bayt. APK 19.906.246 bayt; aapt paket kimliği/versionCode=2/versionName değerlerini doğruladı. Windows imza durumu `NotSigned`.
+- GitHub Windows checks, iki dalda ve yayın etiketinde başarılı oldu. Canlı yayında electron-updater daha yeni preview.2 sürümünü ve installer metaverisini algıladı; bu kontrol eski sürüm numarası kullanan izole bir AppAdapter ile yapıldı ve kurulum başlatılmadı.
+- Önceki yayımlanmış preview.1 APK'sı ve yeni APK `apksigner verify --print-certs` ile doğrulandı; SHA-256 imza sertifikası özetleri aynıydı.
+- Etiketin otomatik release işi, Android setup eyleminin artık bulunmayan varsayılan `tools` SDK paketini istemesi nedeniyle durdu. İş akışı açıkça yalnızca `platform-tools` hazırlayacak şekilde düzeltildi. `workflow_dispatch` doğrulaması ekleri Actions artifact olarak saklar ve mevcut yayımlanmış release dosyalarını değiştirmez.
 
 Yerel loglar: `builds/publish/update-build.log`, `update-tests-final.log`, `updates-smoke.log`, `updater-dist.log`. Android test XML/lint raporları `%TEMP%/EonUpdater-20261113-Android/app/build/` altında.
 
