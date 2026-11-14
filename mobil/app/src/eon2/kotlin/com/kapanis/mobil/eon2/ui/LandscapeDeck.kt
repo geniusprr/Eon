@@ -2,7 +2,6 @@ package com.kapanis.mobil.eon2.ui
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -38,8 +38,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -66,7 +68,6 @@ import java.util.Date
 import java.util.Locale
 
 @get:Composable private val darkDeck get() = MaterialTheme.colorScheme.background.luminance() < .5f
-@get:Composable private val base get() = MaterialTheme.colorScheme.background
 @get:Composable private val surface get() = MaterialTheme.colorScheme.surface
 @get:Composable private val surfaceHigh get() = MaterialTheme.colorScheme.surfaceVariant
 @get:Composable private val border get() = MaterialTheme.colorScheme.outline
@@ -77,10 +78,7 @@ import java.util.Locale
 @get:Composable private val blue get() = if (darkDeck) Color(0xFF95C7F8) else Color(0xFF356B9C)
 @get:Composable private val amber get() = if (darkDeck) Color(0xFFF7C891) else Color(0xFF91612A)
 @get:Composable private val coral get() = if (darkDeck) Color(0xFFFFA5AB) else Color(0xFFA6384F)
-private val panelShape = RoundedCornerShape(18.dp)
-// Both Deck renderers share the optical material; Android samples the common static source.
-@Composable
-private fun Modifier.deckGlass(shape: RoundedCornerShape = panelShape): Modifier = eonGlass(shape)
+private val deckSpacing = 8.dp
 private const val QUICK_SLOT_LIMIT = 6
 
 // EonPeerStatus currently exposes the desktop host name, not a persistent machine UUID.
@@ -115,7 +113,7 @@ private fun cachedLayout(context: android.content.SharedPreferences, key: String
 
 private fun layoutStorageKey(host: String) = "canvasV1_" + quickPreferenceKey(host)
 
-private data class DeckKey(val id: String, val label: String, val kind: String, val available: Boolean,
+internal data class DeckKey(val id: String, val label: String, val kind: String, val available: Boolean,
     val approved: Boolean = true, val customIcon: String = "", val delaySeconds: Long = 0, val deadline: Long? = null) {
     val nativeTool get() = kind in listOf("folder", "terminal", "chart", "settings")
     val identity get() = "${if (nativeTool) "tool" else "action"}:$id"
@@ -160,7 +158,7 @@ private data class DeckKey(val id: String, val label: String, val kind: String, 
     }
 }
 
-private data class DeckData(val keys: List<DeckKey>, val shortcutsAllowed: Boolean, val mediaAvailable: Boolean,
+internal data class DeckData(val keys: List<DeckKey>, val shortcutsAllowed: Boolean, val mediaAvailable: Boolean,
     val gpu: JSONObject?, val media: JSONObject?, val mediaChecked: Boolean) {
     companion object {
         fun parse(value: JSONObject): DeckData {
@@ -537,9 +535,8 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
         if (savingQuick || savingLayout) return@BackHandler
         if (editingLayout) discardLayout() else editingQuick = false
     }
-    Surface(color = Color.Transparent, contentColor = ink, modifier = Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(base, surfaceHigh, base)))
-            .displayCutoutPadding().padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 3.dp)) {
+    DeckGlassBackdrop {
+        Column(Modifier.fillMaxSize().displayCutoutPadding().padding(12.dp), verticalArrangement = Arrangement.spacedBy(deckSpacing)) {
             if (editingLayout) {
                 DeckLayoutEditor(
                     widgets = draftLayout, selectedId = selectedWidget,
@@ -613,11 +610,11 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                         } else DeckNotice(paired, peer.connected, data != null, loadError, onConnect) { refresh++ }
                     } else {
                         BoxWithConstraints(Modifier.fillMaxSize()) {
-                            val rowHeight = ((maxHeight - 14.dp) / 3).coerceAtLeast(48.dp)
+                            val rowHeight = ((maxHeight - deckSpacing * 2) / 3).coerceAtLeast(48.dp)
                             LazyVerticalGrid(columns = GridCells.Fixed(if (denseGrid) 5 else 4),
                                 state = shortcutScroll, modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(7.dp),
-                                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                verticalArrangement = Arrangement.spacedBy(deckSpacing),
+                                horizontalArrangement = Arrangement.spacedBy(deckSpacing)) {
                                 items(shortcutKeys, key = { it.identity }) { key ->
                                     DeckTile(key, denseGrid, !running, { selectKey(key) },
                                         Modifier.fillMaxWidth().height(rowHeight), layout.hideShortcutNames)
@@ -627,7 +624,8 @@ fun LandscapeDeck(client: EonUsbClient, peer: EonPeerStatus, foreground: Boolean
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(48.dp).deckGlass(12.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
                 EonRotationButton("Dikey moda geç", onPortrait, enabled = !savingQuick && !savingLayout)
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     if (running) CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp, color = teal)
@@ -806,7 +804,7 @@ private fun DeckQuickEditor(
                 contentPadding = PaddingValues(horizontal = 7.dp)) { Text("Varsayılan", fontSize = 11.sp) }
             TextButton(onClick = onCancel, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 7.dp)) { Text("Vazgeç", fontSize = 11.sp) }
-            Button(onClick = onSave, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp),
+            Button(shape = MaterialTheme.shapes.medium, onClick = onSave, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp),
                 contentPadding = PaddingValues(horizontal = 13.dp)) { Text("Kaydet", fontSize = 11.sp) }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -849,7 +847,7 @@ private fun DeckSelectedEditorPanel(
     onRemove: (String) -> Unit,
     modifier: Modifier
 ) {
-    Surface(modifier.deckGlass(), shape = panelShape, color = Color.Transparent, border = BorderStroke(1.dp, border)) {
+    Surface(modifier.deckGlass(), shape = eonPanelShape, color = Color.Transparent) {
         Column(Modifier.fillMaxSize().padding(7.dp)) {
             SectionCaption("PANELDEKİLER", "SIRALA VEYA KALDIR", Modifier.fillMaxWidth().height(23.dp))
             if (selected.isEmpty()) {
@@ -861,7 +859,7 @@ private fun DeckSelectedEditorPanel(
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     itemsIndexed(selected, key = { _, key -> key.identity }) { index, key ->
                         Row(Modifier.fillMaxWidth().heightIn(min = 54.dp)
-                            .background(surfaceHigh, RoundedCornerShape(12.dp)).padding(start = 9.dp, end = 2.dp),
+                            .background(surfaceHigh, MaterialTheme.shapes.small).padding(start = 9.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Icon(key.icon, null, Modifier.size(20.dp), tint = key.tint)
                             Spacer(Modifier.width(8.dp))
@@ -899,7 +897,7 @@ private fun DeckAvailableEditorPanel(
     onAdd: (String) -> Unit,
     modifier: Modifier
 ) {
-    Surface(modifier.deckGlass(), shape = panelShape, color = Color.Transparent, border = BorderStroke(1.dp, border)) {
+    Surface(modifier.deckGlass(), shape = eonPanelShape, color = Color.Transparent) {
         Column(Modifier.fillMaxSize().padding(7.dp)) {
             SectionCaption("EKLENEBİLİR", "${candidates.size} İZİNLİ EYLEM", Modifier.fillMaxWidth().height(23.dp))
             if (candidates.isEmpty()) {
@@ -912,7 +910,7 @@ private fun DeckAvailableEditorPanel(
                     items(candidates, key = { it.identity }) { key ->
                         Surface(onClick = { onAdd(key.identity) }, enabled = canAdd,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
-                            shape = RoundedCornerShape(12.dp), color = surfaceHigh) {
+                            shape = MaterialTheme.shapes.small, color = surfaceHigh) {
                             Row(Modifier.fillMaxSize().padding(horizontal = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -965,7 +963,7 @@ private fun DeckLayoutCanvas(widgets: List<DeckWidget>, peer: EonPeerStatus, for
     onConnect: () -> Unit, onRetry: () -> Unit, onEditQuick: () -> Unit,
     onMedia: (String, String) -> Unit, modifier: Modifier, editing: Boolean = false,
     selected: String = "clock", onSelect: (String) -> Unit = {}, hideShortcutNames: Boolean = false) {
-    BoxWithConstraints(modifier.clip(RoundedCornerShape(18.dp))) {
+    BoxWithConstraints(modifier.clipToBounds()) {
         val cellWidth = maxWidth / DECK_COLUMNS
         val cellHeight = maxHeight / DECK_ROWS
         if (editing) {
@@ -987,14 +985,17 @@ private fun DeckLayoutCanvas(widgets: List<DeckWidget>, peer: EonPeerStatus, for
         for (widget in widgets) {
             if (!widget.visible && (!editing || widget.id != selected)) continue
             val position = Modifier.offset(x = cellWidth * widget.x, y = cellHeight * widget.y)
-                .size(width = cellWidth * widget.w, height = cellHeight * widget.h).padding(2.dp)
-            Box(position.clip(panelShape)) {
+                .size(width = cellWidth * widget.w, height = cellHeight * widget.h)
+                .padding(
+                    start = if (widget.x == 0) 0.dp else deckSpacing / 2,
+                    top = if (widget.y == 0) 0.dp else deckSpacing / 2,
+                    end = if (widget.x + widget.w == DECK_COLUMNS) 0.dp else deckSpacing / 2,
+                    bottom = if (widget.y + widget.h == DECK_ROWS) 0.dp else deckSpacing / 2,
+                )
+            Box(position) {
                 if (widget.visible) {
                     when (widget.id) {
-                        "clock" -> Surface(Modifier.fillMaxSize().deckGlass(), shape = panelShape, color = Color.Transparent,
-                            border = BorderStroke(1.dp, border), tonalElevation = 0.dp) {
-                            DeckClock(foreground, Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 5.dp))
-                        }
+                        "clock" -> DeckClock(foreground, Modifier.fillMaxSize().deckGlass(accent = blue))
                         "cpu" -> Gauge("CPU", system?.optJSONObject("cpu"), teal, Modifier.fillMaxSize())
                         "gpu" -> {
                             val temp = data?.gpu?.optInt("temperatureC", -1) ?: -1
@@ -1007,7 +1008,7 @@ private fun DeckLayoutCanvas(widgets: List<DeckWidget>, peer: EonPeerStatus, for
                             BoxWithConstraints(Modifier.fillMaxSize()) {
                                 if (maxWidth < 175.dp || maxHeight < 112.dp) {
                                     Row(Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        horizontalArrangement = Arrangement.spacedBy(deckSpacing)) {
                                         keys.forEach { key ->
                                             DeckTile(key, true, !running, { onKey(key) },
                                                 Modifier.width(98.dp).fillMaxHeight(), hideShortcutNames)
@@ -1017,8 +1018,7 @@ private fun DeckLayoutCanvas(widgets: List<DeckWidget>, peer: EonPeerStatus, for
                             }
                         } else if (data == null || error != null || !peer.connected || !peer.paired) {
                             DeckNotice(peer.connected && peer.paired, peer.connected, data != null, error, onConnect, onRetry)
-                        } else Surface(Modifier.fillMaxSize().deckGlass(), shape = panelShape, color = Color.Transparent,
-                            border = BorderStroke(1.dp, border)) {
+                        } else Box(Modifier.fillMaxSize().deckGlass()) {
                             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center) {
                                 Text("Hızlı tuş seçilmedi", color = muted, style = MaterialTheme.typography.labelMedium)
@@ -1029,12 +1029,12 @@ private fun DeckLayoutCanvas(widgets: List<DeckWidget>, peer: EonPeerStatus, for
                 }
                 if (editing) {
                     Box(Modifier.fillMaxSize().border(if (widget.id == selected) 2.dp else 1.dp,
-                        if (widget.id == selected) teal else border.copy(alpha = .55f), RoundedCornerShape(16.dp))
-                        .background(if (widget.visible) Color.Transparent else surfaceHigh.copy(alpha = .65f), RoundedCornerShape(16.dp))
+                        if (widget.id == selected) teal else border.copy(alpha = .55f), eonPanelShape)
+                        .background(if (widget.visible) Color.Transparent else surfaceHigh.copy(alpha = .65f), eonPanelShape)
                         .clickable { onSelect(widget.id) }, contentAlignment = Alignment.Center) {
                         if (widget.id == selected || !widget.visible) {
                             Surface(color = if (widget.id == selected) teal else surfaceHigh,
-                                shape = RoundedCornerShape(8.dp)) {
+                                shape = MaterialTheme.shapes.small) {
                                 Text("${layoutWidgetTitle(widget.id)}${if (widget.visible) "" else " (gizli)"}",
                                     Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                                     color = if (widget.id == selected) MaterialTheme.colorScheme.onPrimary else ink,
@@ -1083,7 +1083,7 @@ private fun DeckLayoutTools(widgets: List<DeckWidget>, selectedId: String, onSel
     canSave: Boolean, saving: Boolean, offline: Boolean, error: String?, modifier: Modifier) {
     val current = widgets.firstOrNull { it.id == selectedId } ?: widgets.first()
     val index = widgets.indexOfFirst { it.id == current.id }
-    Surface(modifier.deckGlass(), color = Color.Transparent, shape = panelShape, border = BorderStroke(1.dp, border)) {
+    Surface(modifier.deckGlass(), color = Color.Transparent, shape = eonPanelShape) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 9.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("12×6 PANEL DÜZENİ", fontWeight = FontWeight.ExtraBold,
@@ -1139,7 +1139,7 @@ private fun DeckLayoutTools(widgets: List<DeckWidget>, selectedId: String, onSel
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onReset, modifier = Modifier.heightIn(min = 48.dp)) { Text("Sıfırla") }
                 TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) { Text("Vazgeç") }
-                Button(onClick = onSave, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) {
+                Button(shape = MaterialTheme.shapes.medium, onClick = onSave, enabled = canSave, modifier = Modifier.heightIn(min = 48.dp)) {
                     if (saving) CircularProgressIndicator(Modifier.size(15.dp), strokeWidth = 2.dp)
                     else Text("Kaydet")
                 }
@@ -1155,12 +1155,13 @@ private fun DeckClock(foreground: Boolean, modifier: Modifier) {
     val date = remember(locale) { SimpleDateFormat("d MMMM EEEE", locale) }
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(foreground) { while (foreground) { now = Date(); delay(15_000) } }
-    BoxWithConstraints(modifier, contentAlignment = Alignment.CenterStart) {
-        val size = (maxWidth.value / 3.9f).coerceIn(26f, 52f).sp
-        Column(verticalArrangement = Arrangement.Center) {
-            Text(clock.format(now), fontSize = size, lineHeight = size, letterSpacing = (-1.6).sp,
-                fontWeight = FontWeight.Light, maxLines = 1)
-            Text(date.format(now), color = muted, fontSize = 10.sp,
+    BoxWithConstraints(modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
+        val size = minOf(maxWidth.value * .27f, maxHeight.value * .60f).coerceIn(16f, 60f).sp
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(clock.format(now), fontSize = size, lineHeight = size, letterSpacing = (-1.8).sp,
+                style = MaterialTheme.typography.displayMedium.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(date.format(now), color = muted, fontSize = 11.sp, lineHeight = 13.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -1170,28 +1171,30 @@ private fun DeckClock(foreground: Boolean, modifier: Modifier) {
 private fun Gauge(label: String, value: JSONObject?, accent: Color, modifier: Modifier) {
     val number = value?.takeIf { it.has("usagePercent") && !it.isNull("usagePercent") }
         ?.optDouble("usagePercent")?.takeIf { it.isFinite() }?.coerceIn(0.0, 100.0)
-    Surface(modifier.deckGlass(), shape = panelShape, color = Color.Transparent, border = BorderStroke(1.dp, accent.copy(alpha = .26f)),
-        tonalElevation = 0.dp) {
-        Column(Modifier.padding(7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label, color = muted, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.size(5.dp).background(accent, CircleShape))
-            }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val diameter = minOf(maxWidth, maxHeight, 72.dp)
-                Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.fillMaxSize().padding(4.dp)) {
-                        val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
-                        drawCircle(accent.copy(alpha = .13f), radius = size.minDimension / 2, style = stroke)
-                        if (number != null && number > 0)
-                            drawArc(accent, -90f, (number * 3.6).toFloat(), useCenter = false, style = stroke)
+    Column(modifier.deckGlass(accent = accent).padding(horizontal = 10.dp, vertical = 6.dp).semantics(mergeDescendants = true) {
+        if (number != null) progressBarRangeInfo = ProgressBarRangeInfo(number.toFloat(), 0f..100f)
+        else stateDescription = "Veri yok"
+    }, horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(label, color = muted, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Box(Modifier.size(5.dp).background(accent.copy(alpha = if (number == null) .4f else 1f), CircleShape))
+        }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val diameter = minOf(maxWidth, maxHeight, 92.dp)
+            Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize().padding(5.dp)) {
+                    val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+                    drawArc(accent.copy(alpha = .19f), 135f, 270f, useCenter = false, style = stroke)
+                    if (number != null && number > 0) {
+                        drawArc(accent, 135f, (number * 2.7).toFloat(), useCenter = false, style = stroke)
                     }
-                    Text(number?.let { "${it.toInt()}%" } ?: "—",
-                        fontSize = (diameter.value * .25f).coerceIn(11f, 18f).sp,
-                        fontWeight = FontWeight.Bold, maxLines = 1)
                 }
+                Text(number?.let { "${it.toInt()}%" } ?: "—",
+                    fontSize = (diameter.value * .25f).coerceIn(11f, 18f).sp,
+                    style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }
@@ -1209,15 +1212,15 @@ private fun DeckMedia(data: DeckData?, running: Boolean, onMedia: (String, Strin
     }
     EonMediaPlayer(media = data?.media,
         enabled = data?.shortcutsAllowed == true && data.mediaAvailable && !running,
-        detail = detail, onMedia = onMedia, modifier = modifier)
+        detail = detail, onMedia = onMedia, modifier = modifier, deck = true)
 }
 
 @Composable
 private fun KeyMatrix(keys: List<DeckKey>, columns: Int, rows: Int, running: Boolean, onKey: (DeckKey) -> Unit,
     modifier: Modifier = Modifier, compact: Boolean = false, hideShortcutNames: Boolean = false) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(deckSpacing)) {
         repeat(rows) { row ->
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(deckSpacing)) {
                 repeat(columns) { column ->
                     val key = keys.getOrNull(row * columns + column)
                     val slot = Modifier.weight(1f).fillMaxHeight()
@@ -1231,18 +1234,16 @@ private fun KeyMatrix(keys: List<DeckKey>, columns: Int, rows: Int, running: Boo
 @Composable
 private fun DeckTile(key: DeckKey, compact: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier, hideShortcutNames: Boolean = false) {
     val countdown = powerCountdown(key.deadline)
-    val shape = RoundedCornerShape(if (compact) 14.dp else 17.dp)
+    val radius = if (compact) 8.dp else 10.dp
+    val shape = remember(radius) { RoundedCornerShape(radius) }
     val tint = if (countdown != null) teal else if (key.available && key.approved) key.tint else muted
-    Surface(onClick = onClick, enabled = enabled, modifier = modifier.deckGlass(shape).semantics {
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier.deckGlass(radius, tint).semantics {
         if (countdown != null) {
             contentDescription = "${key.label} · Durdur"
             stateDescription = countdown
         }
-    }, shape = shape, color = Color.Transparent,
-        border = BorderStroke(1.dp, tint.copy(alpha = if (key.available && key.approved) .36f else .18f)),
-        tonalElevation = 0.dp) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(Brush.linearGradient(
-            listOf(tint.copy(alpha = if (key.available && key.approved) .12f else .025f), Color.Transparent)))) {
+    }, shape = shape, color = Color.Transparent) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             if (countdown != null) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1288,8 +1289,7 @@ private fun DeckTile(key: DeckKey, compact: Boolean, enabled: Boolean, onClick: 
 @Composable
 private fun DeckNotice(paired: Boolean, connected: Boolean, loaded: Boolean, error: String?,
     onConnect: () -> Unit, onRetry: () -> Unit) {
-    Surface(Modifier.fillMaxSize().deckGlass(), shape = panelShape, color = Color.Transparent,
-        border = BorderStroke(1.dp, border)) {
+    Box(Modifier.fillMaxSize().deckGlass(), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center) {
             val label = when {

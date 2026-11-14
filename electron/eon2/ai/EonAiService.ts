@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { setTimeout as wait } from 'node:timers/promises'
 import type { PcAction } from '../../../shared/eon-controls.js'
 import type { ProgramCandidate } from '../../../shared/contracts.js'
 import type { PcActions } from '../agent/PcActions.js'
@@ -10,6 +11,8 @@ import { parseDeckCommand } from '../agent/PcDeck.js'
 import type { DeckMediaKey } from '../agent/PcDeck.js'
 import { APP_THEMES, isAppTheme, type AppTheme } from '../../../src/theme.js'
 import { readLocalCommand } from './LocalCommands.js'
+import { canRetryStatus, ProviderError, readOpenRouterStream } from './OpenRouterStream.js'
+import type { EonAiProgress } from '../../../shared/contracts.js'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1'
 const DEFAULT_MODEL = 'openai/gpt-4o-mini'
@@ -17,6 +20,9 @@ const MODEL_CACHE_MS = 12 * 60 * 60 * 1000
 const MAX_AGENT_ROUNDS = 8
 // Keep the entire multi-tool session inside the mobile client's 90-second read timeout.
 const MAX_AGENT_DURATION_MS = 75_000
+const MAX_DESKTOP_DURATION_MS = 120_000
+const DESKTOP_IDLE_MS = 15_000
+const DESKTOP_MAX_ATTEMPTS = 5
 const MAX_TOOL_CALLS_PER_ROUND = 8
 const PENDING_COMMAND_TTL_MS = 10 * 60 * 1000
 const SECTIONS = ['dashboard', 'notes', 'devices', 'automations', 'transfers', 'settings', 'ai'] as const
@@ -81,6 +87,8 @@ interface SavedSettings { version: 1; model: string; encryptedApiKey?: string }
 interface SavedCatalog { updatedAt: number; models: string[] }
 interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
 interface RemoteAiAccess { notesWrite: boolean; systemRead: boolean }
+type DesktopSend = { signal: AbortSignal; progress: (event: EonAiProgress) => void; requestId: string }
+type ProviderAnswer = { content?: unknown; tool_calls?: unknown; reasoning_details?: unknown }
 class ApplicationNotFoundError extends Error {}
 
 const OBJECT = (properties: Record<string, unknown>, required: string[] = []) => ({
@@ -342,7 +350,7 @@ export class EonAiService {
     }
   }
 
-  async send(payload: EonAiMessageInput | unknown, remote?: RemoteAiAccess): Promise<EonAiMessageResult> {
+  async send(payload: EonAiMessageInput | unknown, remote?: RemoteAiAccess, desktop?: DesktopSend): Promise<EonAiMessageResult> {
     if (this.sending) throw new Error('Önceki AI isteği henüz tamamlanmadı.')
     const input = requireRecord(payload, 'Geçersiz AI mesajı.')
     exactKeys(input, ['content', 'model', 'history'])
@@ -350,7 +358,8 @@ export class EonAiService {
     const model = input.model === undefined ? this.settings.model : validateModel(requiredString(input, 'model', 180))
     const history = this.readHistory(input.history)
     this.sending = true
-    const deadline = AbortSignal.timeout(MAX_AGENT_DURATION_MS)
+    const timeout = AbortSignal.timeout(desktop ? MAX_DESKTOP_DURATION_MS : MAX_AGENT_DURATION_MS)
+    const deadline = desktop ? AbortSignal.any([desktop.signal, timeout]) : timeout
     try {
       const command = readLocalCommand(content)
       if (command?.kind === 'theme' && this.options.setTheme) {
@@ -368,9 +377,10 @@ export class EonAiService {
       }
       const apiKey = this.readKey()
       if (!apiKey) throw new Error('OpenRouter API anahtarını AI ayarlarından ekleyin.')
-      return await this.chat(model, apiKey, content, history, deadline, remote)
+      return await this.chat(model, apiKey, content, history, deadline, remote, desktop)
     } catch (error) {
-      if (deadline.aborted) throw new Error('AI komutu zaman aşımına uğradı. İşlemleri kontrol edip tekrar deneyin.')
+      if (desktop?.signal.aborted) throw new Error('Yanıt durduruldu.')
+      if (timeout.aborted) throw new Error('AI komutu zaman aşımına uğradı. İşlemleri kontrol edip tekrar deneyin.')
       throw error
     }
     finally {
@@ -405,7 +415,47 @@ export class EonAiService {
     catch { throw new Error('OpenRouter anahtarı çözülemedi. AI ayarlarından yeniden girin.') }
   }
 
-  private async chat(model: string, apiKey: string, content: string, history: ReturnType<EonAiService['readHistory']>, deadline: AbortSignal, remote?: RemoteAiAccess): Promise<EonAiMessageResult> {
+  private async requestAnswer(request: { model: string; messages: unknown[]; tools: unknown[] }, apiKey: string,
+    deadline: AbortSignal, desktop: DesktopSend | undefined, onText: (text: string) => void): Promise<ProviderAnswer> {
+    const idle = new AbortController()
+    const signal = desktop ? AbortSignal.any([deadline, idle.signal]) : deadline
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const resetIdle = () => {
+      if (!desktop) return
+      clearTimeout(timer)
+      timer = setTimeout(() => idle.abort(), DESKTOP_IDLE_MS)
+    }
+    resetIdle()
+    try {
+      const response = await (this.options.fetcher ?? fetch)(`${OPENROUTER_URL}/chat/completions`, {
+        method: 'POST', signal,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://kapanis.app', 'X-Title': 'Eon' },
+        body: JSON.stringify({ ...request, provider: { require_parameters: true, preferred_max_latency: 2 }, ...(desktop && { stream: true }) }),
+      })
+      resetIdle()
+      if (response.ok && response.body && response.headers.get('content-type')?.includes('text/event-stream')) {
+        return await readOpenRouterStream(response.body, onText, resetIdle, MAX_TOOL_CALLS_PER_ROUND)
+      }
+      const body: unknown = await response.json().catch(() => null)
+      if (!response.ok) {
+        const header = response.headers.get('retry-after')
+        const seconds = Number(header)
+        const retryAfter = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header ?? '') - Date.now()
+        const error = body && typeof body === 'object' ? (body as { error?: { message?: unknown } }).error?.message : undefined
+        const detail = !desktop && typeof error === 'string' ? `: ${error.slice(0, 250)}` : '.'
+        throw new ProviderError(`OpenRouter isteği başarısız (HTTP ${response.status})${detail}`,
+          canRetryStatus(response.status), Number.isFinite(retryAfter) ? Math.max(0, retryAfter) : 0)
+      }
+      const packet = requireRecord(body, 'OpenRouter geçersiz yanıt döndürdü.')
+      const choice = Array.isArray(packet.choices) ? packet.choices[0] as { message?: ProviderAnswer } | undefined : undefined
+      if (!choice?.message || typeof choice.message !== 'object') throw new ProviderError('OpenRouter geçersiz mesaj döndürdü.')
+      return choice.message
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  private async chat(model: string, apiKey: string, content: string, history: ReturnType<EonAiService['readHistory']>, deadline: AbortSignal, remote?: RemoteAiAccess, desktop?: DesktopSend): Promise<EonAiMessageResult> {
     const messages: Array<Record<string, unknown>> = [
       { role: 'system', content: SYSTEM_PROMPT }, ...history, { role: 'user', content },
     ]
@@ -417,28 +467,44 @@ export class EonAiService {
       .map(item => ({ type: 'function', function: item }))
     const events: string[] = []
     const confirmations: string[] = []
+    let retryCount = 0
     for (let round = 0; round < MAX_AGENT_ROUNDS; round++) {
-      const response = await (this.options.fetcher ?? fetch)(`${OPENROUTER_URL}/chat/completions`, {
-        method: 'POST', signal: deadline,
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://kapanis.app', 'X-Title': 'Eon' },
-        body: JSON.stringify({ model, messages, tools: toolDefs, provider: { require_parameters: true, preferred_max_latency: 2 } }),
-      })
-      const body: unknown = await response.json().catch(() => null)
-      if (!response.ok) {
-        const error = body && typeof body === 'object' ? (body as { error?: { message?: unknown } }).error?.message : undefined
-        throw new Error(`OpenRouter isteği başarısız (HTTP ${response.status})${typeof error === 'string' ? `: ${error.slice(0, 250)}` : '.'}`)
+      let answer: ProviderAnswer
+      let reply: string
+      let calls: ToolCall[]
+      // Retry a provider round with the same transcript, including previously committed tool results.
+      while (true) {
+        deadline.throwIfAborted()
+        let nextPublishAt = 0
+        try {
+          answer = await this.requestAnswer({ model, messages, tools: toolDefs }, apiKey, deadline, desktop, text => {
+            if (!desktop || performance.now() < nextPublishAt) return
+            desktop.progress({ requestId: desktop.requestId, kind: 'text', text })
+            nextPublishAt = performance.now() + 40
+          })
+          deadline.throwIfAborted()
+          reply = typeof answer.content === 'string' ? answer.content.trim() : ''
+          calls = this.parseToolCalls(answer.tool_calls)
+          if (!reply && !calls.length) throw new ProviderError('OpenRouter boş yanıt döndürdü.')
+          break
+        } catch (error) {
+          if (!desktop || deadline.aborted || (error instanceof ProviderError && !error.retryable)) throw error
+          if (retryCount >= DESKTOP_MAX_ATTEMPTS - 1) {
+            const toolNotice = events.length ? ' Önceki adımlardaki işlemleri kontrol et.' : ''
+            throw new Error(`Beş denemeden sonra yanıt alınamadı.${toolNotice}`)
+          }
+          retryCount += 1
+          desktop.progress({ requestId: desktop.requestId, kind: 'retrying', attempt: retryCount + 1, limit: DESKTOP_MAX_ATTEMPTS })
+          const backoff = 500 * 2 ** (retryCount - 1)
+          const retryAfter = error instanceof ProviderError ? error.retryAfterMs : 0
+          await wait(Math.min(MAX_DESKTOP_DURATION_MS, Math.max(backoff, retryAfter)), undefined, { signal: deadline })
+        }
       }
-      const packet = requireRecord(body, 'OpenRouter geçersiz yanıt döndürdü.')
-      const choice = Array.isArray(packet.choices) ? packet.choices[0] as { message?: { content?: unknown; tool_calls?: unknown; reasoning_details?: unknown } } | undefined : undefined
-      const answer = choice?.message
-      if (!answer || typeof answer !== 'object') throw new Error('OpenRouter geçersiz mesaj döndürdü.')
-      const reply = typeof answer.content === 'string' ? answer.content.trim() : ''
-      const calls = this.parseToolCalls(answer.tool_calls)
       if (!calls.length) {
-        if (!reply) throw new Error('OpenRouter boş yanıt döndürdü.')
         return { reply, ...(events.length ? { actions: events } : {}) }
       }
       if (calls.length > MAX_TOOL_CALLS_PER_ROUND) throw new Error('AI tek adımda çok fazla araç istedi.')
+      if (desktop) desktop.progress({ requestId: desktop.requestId, kind: 'working' })
       messages.push({ role: 'assistant', content: reply || null, tool_calls: calls,
         ...(Array.isArray(answer.reasoning_details) ? { reasoning_details: answer.reasoning_details } : {}) })
       for (const [index, call] of calls.entries()) {

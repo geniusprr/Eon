@@ -71,6 +71,13 @@ const output = path.resolve('docs/eon2/qa-workspace')
   if (process.platform === 'win32') {
     try {
       assert.equal(await js("window.kapanisDesktop.invoke('eon2:settings:set', {key:'autostart',value:true}).then(result=>result.autostart)"), true)
+      const loginOptions = { path: `"${process.execPath}"`, args: [app.getAppPath(), '--background'] }
+      const registered = app.getLoginItemSettings(loginOptions)
+      assert.equal(registered.openAtLogin, true)
+      assert.equal(registered.executableWillLaunchAtLogin, true)
+      app.setLoginItemSettings({ ...loginOptions, openAtLogin: true, enabled: false })
+      assert.equal(await js("window.kapanisDesktop.invoke('eon2:settings:get').then(result=>result.autostart)"), false)
+      assert.equal(await js("window.kapanisDesktop.invoke('eon2:settings:set', {key:'autostart',value:true}).then(result=>result.autostart)"), true)
     } finally {
       assert.equal(await js("window.kapanisDesktop.invoke('eon2:settings:set', {key:'autostart',value:false}).then(result=>result.autostart)"), false)
     }

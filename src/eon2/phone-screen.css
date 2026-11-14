@@ -45,9 +45,9 @@
 .eon2-theme-light .eon2-phone-error { color:#893b3b; }
 .eon2-phone-error svg { flex:0 0 auto; }
 .eon2-phone-preview { min-width:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:13px; }
-.eon2-phone-shell { --frame-bezel:10px; --frame-screen-radius:20px; width:min(100%,258px); }
+.eon2-phone-shell { --frame-bezel:7px; --frame-screen-radius:23px; width:min(100%,258px); }
 .eon2-phone-viewport { width:100%;aspect-ratio:9/19.5;position:relative;overflow:hidden;background:var(--e-bg); }
-.eon2-phone-surface.is-landscape .eon2-phone-shell { --frame-screen-radius:16px; width:min(100%,700px); }
+.eon2-phone-surface.is-landscape .eon2-phone-shell { --frame-screen-radius:20px; width:min(100%,700px); }
 .eon2-phone-surface.is-landscape .eon2-phone-viewport { aspect-ratio:19.5/9; }
 .eon2-phone-placeholder { position:absolute;inset:0;display:flex;justify-content:center;align-items:center;flex-direction:column;gap:14px;padding:18px;text-align:center;pointer-events:none;background:radial-gradient(ellipse at 50% 28%,color-mix(in srgb,var(--e-accent-deep) 13%,transparent),transparent 68%); }
 .eon2-phone-placeholder>svg { color:var(--e-accent-deep);stroke-width:1.5; }
@@ -76,7 +76,7 @@
 .eon2-phone-surface.is-compact .eon2-phone-help { order:6;font-size:10px;line-height:1.4;margin:1px 0 0; }
 .eon2-phone-surface.is-compact .eon2-phone-orientation-group { order:6; }
 .eon2-phone-surface.is-compact .eon2-phone-error,.eon2-phone-surface.is-compact .eon2-phone-info { order:7; }
-.eon2-phone-surface.is-compact .eon2-phone-shell { --frame-bezel:8px; --frame-screen-radius:13px; width:min(100%,clamp(158px,22vh,196px)); }
+.eon2-phone-surface.is-compact .eon2-phone-shell { --frame-bezel:6px; --frame-screen-radius:16px; width:min(100%,clamp(158px,22vh,196px)); }
 .eon2-phone-surface.is-compact.is-landscape .eon2-phone-shell { width:min(100%,420px); }
 @media (max-width:890px) { .eon2-phone-surface:not(.is-compact) .eon2-phone-body { grid-template-columns:1fr;gap:24px; } }
 @media (max-width:380px) { .eon2-phone-surface .eon2-phone-mode-switch button { gap:3px;font-size:9px!important; } }

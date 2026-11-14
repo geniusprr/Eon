@@ -6,6 +6,7 @@ import path from 'node:path'
 import { EonAiService, type EonAiSecureStorage } from './EonAiService.js'
 import { PcActions } from '../agent/PcActions.js'
 import { DeckLayoutStore } from '../deck/DeckLayoutStore.js'
+import type { EonAiProgress } from '../../../shared/contracts.js'
 
 const keyStore: EonAiSecureStorage = {
   isEncryptionAvailable: () => true,
@@ -38,6 +39,78 @@ function response(message: Record<string, unknown>) {
 function tool(name: string, args: object) {
   return { id: `call-${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }
 }
+
+function stream(deltas: object[], finish: 'stop' | 'tool_calls' | 'error') {
+  const events = deltas.map(delta => ({ choices: [{ delta }] }))
+  const raw = ': keepalive\r\n\r\n' + [...events, { choices: [{ finish_reason: finish }] }]
+    .map(event => `data: ${JSON.stringify(event)}\r\n\r\n`).join('') + 'data: [DONE]\r\n\r\n'
+  const bytes = new TextEncoder().encode(raw)
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (let index = 0; index < bytes.length; index += 7) controller.enqueue(bytes.subarray(index, index + 7))
+      controller.close()
+    },
+  }), { headers: { 'Content-Type': 'text/event-stream' } })
+}
+
+test('desktop streams text and retries a dropped provider round without executing a saved tool twice', () => fixture(async ({ storage, actions }) => {
+  let requests = 0
+  let notesSaved = 0
+  const progress: EonAiProgress[] = []
+  const service = new EonAiService({ dataDir: storage, actions, secureStorage: keyStore, navigate: () => undefined,
+    createNote: note => ({ id: String(++notesSaved), title: note.title }),
+    fetcher: async (_url, init) => {
+      const payload = JSON.parse(String(init?.body))
+      assert.equal(payload.stream, true)
+      if (++requests === 1) return stream([
+        { tool_calls: [{ index: 0, id: 'note', function: { name: 'eon_notes', arguments: '{"title":"İş",' } }],
+          reasoning_details: [{ index: 0, type: 'reasoning.text', text: 'İlk ' }] },
+        { tool_calls: [{ index: 0, function: { arguments: '"content":"Not"}' } }],
+          reasoning_details: [{ index: 0, type: 'reasoning.text', text: 'adım', signature: 'signed' }] },
+      ], 'tool_calls')
+      assert.equal(payload.messages.at(-1).tool_call_id, 'note')
+      assert.deepEqual(payload.messages.at(-2).reasoning_details, [{ index: 0, type: 'reasoning.text', text: 'İlk adım', signature: 'signed' }])
+      return requests === 2 ? stream([{ content: 'Yarım cevap' }], 'error') : stream([{ content: 'Not ' }, { content: 'kaydedildi.' }], 'stop')
+    },
+  })
+  service.configure({ apiKey: 'sample' })
+  const answer = await service.send({ content: 'Bir not kaydet' }, undefined, {
+    requestId: 'test', signal: new AbortController().signal, progress: event => progress.push(event),
+  })
+  assert.equal(notesSaved, 1)
+  assert.equal(requests, 3)
+  assert.equal(answer.reply, 'Not kaydedildi.')
+  assert.deepEqual(progress.map(event => event.kind), ['working', 'text', 'retrying', 'text'])
+}))
+
+test('desktop gives up on the fifth failed request and stops immediately on permanent errors or cancellation', () => fixture(async ({ storage, actions }) => {
+  let attempts = 0
+  let status = 503
+  const controller = new AbortController()
+  const retries: number[] = []
+  let cancelOnRetry = false
+  const service = new EonAiService({ dataDir: storage, actions, secureStorage: keyStore, navigate: () => undefined,
+    fetcher: async () => { attempts++; return new Response(null, { status }) },
+  })
+  service.configure({ apiKey: 'sample' })
+  const send = () => service.send({ content: 'Bir şey soracağım' }, undefined, {
+    requestId: 'test', signal: controller.signal, progress: event => {
+      if (event.kind !== 'retrying') return
+      retries.push(event.attempt)
+      if (cancelOnRetry) controller.abort()
+    },
+  })
+  await assert.rejects(send(), /Beş denemeden sonra/)
+  assert.equal(attempts, 5)
+  assert.deepEqual(retries, [2, 3, 4, 5])
+  status = 401
+  await assert.rejects(send(), /HTTP 401/)
+  assert.equal(attempts, 6)
+  status = 503
+  cancelOnRetry = true
+  await assert.rejects(send(), /Yanıt durduruldu/)
+  assert.equal(attempts, 7)
+}))
 
 const APP_PATH = 'C:\\Program Files\\SampleApp\\SampleApp.exe'
 

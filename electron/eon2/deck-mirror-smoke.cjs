@@ -48,6 +48,9 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
       const shell = box('.eon-mirror-phone')
       const screen = box('.eon-mirror-display')
       const grid = box('.eon-mirror-grid')
+      const footer = box('.eon-mirror-foot')
+      const picker = document.querySelector('.eon-mirror-key-pages select')
+      const pickerStyle = getComputedStyle(picker)
       const cards = [...document.querySelectorAll('.eon-mirror-tile')].map(tile => ({
         id:tile.dataset.deckWidget, r:tile.getBoundingClientRect(),
       }))
@@ -55,6 +58,14 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
         innerWidth, innerHeight,
         pageOverflow:document.documentElement.scrollWidth > innerWidth + 2,
         frameWidth:shell.width, frameHeight:shell.height,
+        topBezel:screen.top - shell.top, bottomBezel:shell.bottom - screen.bottom,
+        footerHeight:footer.height, footerInset:screen.bottom - footer.bottom,
+        pickerBorder:pickerStyle.borderTopWidth, pickerBackground:pickerStyle.backgroundColor,
+        controlsInside:[...document.querySelectorAll('.eon-mirror-foot button,.eon-mirror-foot select')].every(control => {
+          const rect = control.getBoundingClientRect()
+          return rect.top >= footer.top && rect.bottom <= footer.bottom && rect.left >= footer.left && rect.right <= footer.right
+        }),
+        contentInsetAligned:Math.abs(grid.top - screen.top - parseFloat(getComputedStyle(document.querySelector('.eon-mirror-grid')).paddingLeft)) < 1,
         headerVisible:box('.eon2-topbar').width > innerWidth*.5,
         sidebarVisible:box('.eon2-sidebar').width > 45,
         frameInside:screen.left >= shell.left && screen.right <= shell.right && screen.top >= shell.top && screen.bottom <= shell.bottom,
@@ -67,6 +78,12 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
     assert.equal(measure.headerVisible, true, `header changed ${width}`)
     assert.equal(measure.sidebarVisible, true, `sidebar changed ${width}`)
     assert.equal(measure.frameInside, true, `phone frame clipped ${width}`)
+    assert.ok(measure.bottomBezel <= 5 && measure.bottomBezel < measure.topBezel, `thick bottom bezel ${width}`)
+    assert.ok(measure.footerHeight <= 48 && measure.footerInset >= 1, `oversized or flush footer ${width}`)
+    assert.equal(measure.pickerBorder, '0px', `boxed page picker ${width}`)
+    assert.equal(measure.pickerBackground, 'rgba(0, 0, 0, 0)', `boxed page picker ${width}`)
+    assert.equal(measure.controlsInside, true, `footer control clipped ${width}`)
+    assert.equal(measure.contentInsetAligned, true, `unequal top and side insets ${width}`)
     assert.equal(measure.cardsInside, true, `deck card outside frame ${width}`)
     assert.equal(measure.overlaps, false, `deck card overlaps ${width}`)
     assert.equal(measure.gaugeCount, 4)
@@ -251,9 +268,20 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
   assert.equal(await js('getComputedStyle(document.querySelector(".eon-mirror")).getPropertyValue("--mirror-bg").trim()'), '#e5eef7')
   await fs.writeFile(path.join(target,'mirror-light.png'),(await win.webContents.capturePage()).toPNG())
   phase = 'navigation'
-  await js(`document.querySelector('.eon2-nav-item[title="Cihazlar"]').click()`)
+  await js(`document.querySelector('.eon-mirror-phone-link').click()`)
   await wait(350)
   assert.equal(await js('!!document.querySelector(".eon2-phone-surface")'), true)
+  for (const orientation of ['Dikey', 'Yatay']) {
+    await js(`[...document.querySelectorAll('.eon2-phone-orientation-switch button')]
+      .find(button => button.textContent.trim() === ${JSON.stringify(orientation)}).click()`)
+    const preview = await js(`(() => {
+      const frame = document.querySelector('.eon2-phone-shell').getBoundingClientRect()
+      const screen = document.querySelector('.eon2-phone-viewport').getBoundingClientRect()
+      return { ratio:screen.width / screen.height, top:screen.top - frame.top, bottom:frame.bottom - screen.bottom }
+    })()`)
+    assert.equal(preview.ratio > 1, orientation === 'Yatay')
+    assert.ok(preview.bottom > 0 && preview.bottom <= 5 && preview.bottom < preview.top, `thick ${orientation} preview bezel`)
+  }
   await js(`document.querySelector('.eon2-logo').click()`)
   await wait(350)
   assert.equal(await js('!!document.querySelector(".eon-mirror-phone")'), true)

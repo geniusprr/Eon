@@ -9,6 +9,22 @@ import type { AppSettings, TimerAction, TimerState } from '../src/types.js'
 const execFileAsync = promisify(execFile)
 const MAX_TIMER_SECONDS = 315_360_000
 const MAX_TERMINAL_COMMAND_LENGTH = 4_096
+
+export function windowsAppId() {
+  if (process.env.KAPANIS_SMOKE_TEST === '1') return 'com.kapanis.desktop.smoke'
+  return app.isPackaged ? 'com.kapanis.desktop' : 'com.kapanis.desktop.dev'
+}
+
+function windowsLoginOptions() {
+  // Electron escapes individual arguments. Its Windows lookup also parses
+  // the executable path as a command line, so quote it for paths with spaces.
+  const args = app.isPackaged ? ['--background'] : [app.getAppPath(), '--background']
+  return { path: `"${process.execPath}"`, args }
+}
+
+function windowsLoginItem(login: Electron.LoginItemSettings) {
+  return login.launchItems.find(item => item.scope === 'user' && item.name === windowsAppId())
+}
 const MAX_TERMINAL_OUTPUT_LENGTH = 64 * 1_024
 
 export interface ElevatedCommandResult {
@@ -178,11 +194,25 @@ export class SystemManager {
   }
 
   getAutostart() {
-    try { return app.getLoginItemSettings({ args: ['--background'] }).openAtLogin } catch { return false }
+    if (process.platform === 'win32') {
+      const login = app.getLoginItemSettings(windowsLoginOptions())
+      return login.openAtLogin && windowsLoginItem(login)?.enabled === true
+    }
+    return process.platform === 'darwin' && app.getLoginItemSettings().openAtLogin
   }
 
   setAutostart(enabled: boolean) {
-    app.setLoginItemSettings({ openAtLogin: enabled, args: ['--background'], openAsHidden: true })
+    if (process.platform === 'win32') {
+      const options = windowsLoginOptions()
+      app.setLoginItemSettings({ ...options, name: windowsAppId(), openAtLogin: enabled, enabled })
+      const login = app.getLoginItemSettings(options)
+      const item = windowsLoginItem(login)
+      if (enabled ? !login.openAtLogin || !item?.enabled : item !== undefined) {
+        throw new Error('Windows başlangıç ayarı kaydedilemedi.')
+      }
+      return enabled
+    }
+    if (process.platform === 'darwin') app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: true })
     return this.getAutostart()
   }
 

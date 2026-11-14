@@ -209,7 +209,7 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>, bottomClearance:
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
                     Icon(Icons.Rounded.Close, "Aramayı temizle") } },
-                singleLine = true, shape = RoundedCornerShape(18.dp))
+                singleLine = true, shape = MaterialTheme.shapes.medium)
             if (pathsFailed) Text("Klasör yolları okunamadı. Notlar listelenmeye devam ediyor.",
                 color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.height(10.dp))
@@ -228,7 +228,7 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>, bottomClearance:
                 }
                 if (foldersVisible) {
                     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(18.dp)) {
+                        shape = eonPanelShape) {
                         Column(Modifier.padding(8.dp)) {
                             FolderTree(folders, counts, collapsed, folder,
                                 modifier = Modifier.heightIn(max = 210.dp),
@@ -243,7 +243,7 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>, bottomClearance:
                 if (wide) {
                     Surface(modifier = Modifier.width(230.dp).fillMaxHeight(),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        shape = RoundedCornerShape(20.dp),
+                        shape = eonPanelShape,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                         Column(Modifier.fillMaxSize().padding(12.dp)) {
                             Text("DOSYA GEZGİNİ", modifier = Modifier.padding(10.dp),
@@ -300,7 +300,7 @@ fun NotesContent(modifier: Modifier, notes: List<EonLocalNote>, bottomClearance:
 private fun FolderShortcut(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
         .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-            RoundedCornerShape(12.dp)).clickable(onClickLabel = "$label görünümünü aç", onClick = onClick)
+            MaterialTheme.shapes.small).clickable(onClickLabel = "$label görünümünü aç", onClick = onClick)
         .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(if (label == "Çakışmalar") Icons.Rounded.ErrorOutline else Icons.Rounded.Inventory2,
             null, Modifier.size(18.dp))
@@ -332,7 +332,7 @@ private fun FolderTree(folders: List<String>, counts: Map<String, Int>, collapse
         val children = folder in parents
         Row(Modifier.fillMaxWidth()
             .background(if (selected == folder) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent, RoundedCornerShape(12.dp))
+                else Color.Transparent, MaterialTheme.shapes.small)
             .padding(start = 9.dp * (segments.size - 1).coerceIn(0, 5)),
             verticalAlignment = Alignment.CenterVertically) {
             if (children) IconButton(onClick = { onExpand(folder) }, modifier = Modifier.size(40.dp)) {
@@ -361,11 +361,11 @@ private fun FolderTree(folders: List<String>, counts: Map<String, Int>, collapse
 private fun VaultNoteRow(note: EonLocalNote, path: String, onOpen: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth().eonGlass().clickable(
         onClickLabel = "${note.title} notunu aç", onClick = onOpen),
-        color = Color.Transparent, shape = RoundedCornerShape(24.dp)) {
+        color = Color.Transparent, shape = eonPanelShape) {
         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Surface(modifier = Modifier.size(42.dp), color = if (note.conflict)
                 MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(12.dp)) {
+                shape = MaterialTheme.shapes.small) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(if (note.conflict) Icons.Rounded.ErrorOutline else Icons.Rounded.Description,
                         null, Modifier.size(22.dp))
@@ -571,7 +571,7 @@ fun EonNoteEditor(modifier: Modifier, note: EonLocalNote?, onBack: () -> Unit,
                     Icon(if (focus) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                         if (focus) "Odak modundan çık" else "Odak modu")
                 }
-                Button(onClick = { commit { onSave(title, body.text) } }, enabled = canSave,
+                Button(shape = MaterialTheme.shapes.medium, onClick = { commit { onSave(title, body.text) } }, enabled = canSave,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp)) {
                     Text("Kaydet")
                 }
@@ -624,7 +624,7 @@ fun EonNoteEditor(modifier: Modifier, note: EonLocalNote?, onBack: () -> Unit,
                 }
                 Surface(modifier = Modifier.weight(1f).fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = eonPanelShape,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
                     if (mode == NoteMode.READ.name) {
                         MarkdownReader(body.text, enabled = canEdit, onToggleTask = { offset ->
@@ -714,7 +714,7 @@ fun EonNoteEditor(modifier: Modifier, note: EonLocalNote?, onBack: () -> Unit,
 
 @Composable
 private fun NoteFormatAction(label: String, enabled: Boolean, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 45.dp),
+    OutlinedButton(shape = MaterialTheme.shapes.medium, onClick = onClick, enabled = enabled, modifier = Modifier.heightIn(min = 45.dp),
         contentPadding = PaddingValues(horizontal = 13.dp, vertical = 6.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
     }
@@ -881,7 +881,7 @@ private fun MarkdownReader(markdown: String, enabled: Boolean, onToggleTask: (In
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 MarkdownKind.CODE -> Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
                     Text(block.text.ifBlank { " " },
                         modifier = Modifier.horizontalScroll(rememberScrollState()).padding(14.dp),
                         fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)

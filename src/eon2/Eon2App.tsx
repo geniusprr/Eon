@@ -237,7 +237,7 @@ export function Eon2App() {
       catch { if (alive) setSnapshot(null) }
     }
     void update()
-    const id = window.setInterval(() => { if (!document.hidden && (section === 'dashboard' || section === 'ai')) void update() }, 2000)
+    const id = window.setInterval(() => { if (!document.hidden && section === 'dashboard') void update() }, 2000)
     return () => { alive = false; window.clearInterval(id) }
   }, [section])
   useEffect(() => {
@@ -273,9 +273,9 @@ export function Eon2App() {
         <span aria-hidden="true" className={`eon2-title-status-dot ${deviceConnected ? 'is-connected' : ''}`}/><span className="eon2-title-status-label">{connectionLabel}</span>
       </button>
     </header>
-      <main className={`eon2-content ${section === 'dashboard' ? 'eon2-content--board' : ''}`} id="main-content">
+      <main className={`eon2-content ${section === 'dashboard' ? 'eon2-content--board' : ''} ${section === 'ai' ? 'eon2-content--ai' : ''}`} id="main-content">
         {section === 'dashboard' && <><DeckMirror snapshot={snapshot} devices={devices} now={now} navigate={setSection}/><EonAiHome ai={ai} onOpen={() => setSection('ai')}/></>}
-        {section === 'ai' && <EonAiWorkspace ai={ai} snapshot={snapshot} now={now}/>}
+        {section === 'ai' && <EonAiWorkspace ai={ai}/>}
 
         {section === 'notes' && notesError && <div className="eon2-error" role="alert">{notesError}</div>}
         {notesActivated && <Suspense fallback={section === 'notes' ? <div className="eon2-empty" role="status">Notlar açılıyor...</div> : null}>

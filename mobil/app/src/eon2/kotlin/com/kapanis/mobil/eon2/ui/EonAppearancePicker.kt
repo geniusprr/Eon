@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
@@ -52,11 +51,11 @@ internal fun EonAppearancePicker(selected: String, enabled: Boolean, onSelect: (
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(eonAppearances, key = { it.id }) { appearance ->
                 val active = selected == appearance.id
-                Column(Modifier.width(98.dp).heightIn(min = 116.dp).clip(RoundedCornerShape(22.dp))
+                Column(Modifier.width(98.dp).heightIn(min = 116.dp).clip(eonPanelShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .border(if (active) 1.5.dp else .75.dp,
                         if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        RoundedCornerShape(22.dp))
+                        eonPanelShape)
                     .selectable(active, enabled = enabled, role = Role.RadioButton, onClick = { onSelect(appearance.id) })
                     .padding(horizontal = 6.dp, vertical = 14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -226,7 +226,7 @@ internal fun PcRemoteScreen(client: EonUsbClient, peer: EonPeerStatus, foregroun
                 when {
                     !ready -> Text("PC ekranını açmak için telefonu Eon ile eşleştir ve USB veya Tailscale üzerinden bağlan.")
                     status?.supported == false -> Text("PC ekran paylaşımı Windows’ta kullanılabilir.")
-                    status == null && notice != null -> OutlinedButton(onClick = { notice = null; refresh++ }) { Text("Tekrar dene") }
+                    status == null && notice != null -> OutlinedButton(shape = MaterialTheme.shapes.medium, onClick = { notice = null; refresh++ }) { Text("Tekrar dene") }
                     status == null -> CircularProgressIndicator(Modifier.size(24.dp))
                     else -> {
                         Text("Paylaşılacak ekran", style = MaterialTheme.typography.titleMedium)
@@ -246,7 +246,7 @@ internal fun PcRemoteScreen(client: EonUsbClient, peer: EonPeerStatus, foregroun
                             Switch(checked = requestControl, onCheckedChange = { requestControl = it })
                         }
                         val display = status?.displays?.firstOrNull { it.id == selected }
-                        Button(enabled = display != null, onClick = {
+                        Button(shape = MaterialTheme.shapes.medium, enabled = display != null, onClick = {
                             if (display != null) {
                                 notice = null
                                 attempt = PcRemoteAttempt(display, quality, requestControl)

@@ -4,7 +4,7 @@ const fs = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
-const { app, shell } = require('electron')
+const { app, ipcMain, shell } = require('electron')
 
 process.env.KAPANIS_SMOKE_TEST = '1'
 let runtime
@@ -86,6 +86,7 @@ let step = 'startup'
   step = 'AI IPC and section'
   const state = await evalJs(`window.kapanisDesktop.invoke('eon2:ai:state')`)
   assert.equal(state.configured, false)
+  assert.equal(state.streaming, true)
   assert.ok(typeof state.model === 'string')
   assert.equal(await evalJs(`window.kapanisDesktop.invoke('eon2:ai:pending')`), null)
   await evalJs(`[...document.querySelectorAll('.eon2-nav-item')].find(b => b.title === 'Eon AI').click()`)
@@ -102,7 +103,7 @@ let step = 'startup'
   assert.equal(await evalJs(`Boolean(document.querySelector('.eon-ai-chat-history'))`), true)
 
   step = 'connection settings and secure key isolation'
-  await evalJs(`document.querySelector('.eon-ai-chat-header button:last-child').click()`)
+  await evalJs(`document.querySelector('.eon-ai-chat-header [aria-label="OpenRouter ayarlarını aç"]').click()`)
   await settle()
   assert.equal(await evalJs(`Boolean(document.querySelector('.eon-ai-account-connect'))`), true)
   assert.equal(await evalJs(`Boolean(document.querySelector('.eon-ai-dialog input[type="password"]'))`), true)
@@ -113,6 +114,29 @@ let step = 'startup'
   await fs.mkdir(output, { recursive: true })
   await fs.writeFile(path.join(output, 'ai-settings.png'), (await window.webContents.capturePage()).toPNG())
   await evalJs(`document.querySelector('.eon-ai-dialog header button:last-child').click()`)
+  await settle()
+  await fs.writeFile(path.join(output, 'ai-workspace-dark.png'), (await window.webContents.capturePage()).toPNG())
+
+  step = 'compact AI workspace at desktop window sizes'
+  for (const [width, height] of [[720, 520], [900, 720], [1440, 900], [3840, 2160]]) {
+    window.setContentSize(width, height)
+    await settle()
+    const layout = await evalJs(`(() => {
+      const workspace = document.querySelector('.eon-ai-workspace').getBoundingClientRect()
+      const composer = document.querySelector('.eon-ai-chat-bottom').getBoundingClientRect()
+      const history = document.querySelector('.eon-ai-chat-history').getBoundingClientRect()
+      const available = document.querySelector('.eon2-content--ai').getBoundingClientRect()
+      return { workspace: workspace.width, available: available.width, composer: composer.height, history: history.height,
+        fits: composer.bottom <= innerHeight && workspace.right <= innerWidth,
+        threadsVisible: Boolean(document.querySelector('.eon-ai-threads')) }
+    })()`)
+    assert.ok(layout.fits && !layout.threadsVisible && layout.history > 260 && layout.composer < 112 && layout.workspace >= layout.available - 28, JSON.stringify(layout))
+    await evalJs(`document.querySelector('[aria-label="Sohbetler"]').click()`)
+    assert.equal(await evalJs(`document.querySelector('.eon-ai-threads [aria-current="true"]').textContent`), 'Yeni sohbet')
+    await evalJs(`document.querySelector('[aria-label="Sohbetler"]').click()`)
+  }
+  window.setContentSize(1440, 900)
+  await settle()
 
   step = 'Windows discovery and shortcut creation through the renderer bridge'
   const originalFetch = globalThis.fetch
@@ -174,6 +198,87 @@ let step = 'startup'
       await settle()
     }
     assert.ok(await evalJs(`Boolean(document.querySelector('.eon2-app.eon2-theme-light'))`))
+
+    step = 'retry and streaming feedback in the real composer'
+    let attempts = 0
+    let finishStream
+    globalThis.fetch = async (url, options) => {
+      if (url !== 'https://openrouter.ai/api/v1/chat/completions') return originalFetch(url, options)
+      assert.equal(JSON.parse(options.body).stream, true)
+      if (++attempts === 1) return new Response(null, { status: 503 })
+      const encode = event => new TextEncoder().encode(`data: ${JSON.stringify({ choices: [event] })}\n\n`)
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(encode({ delta: { content: 'İlk parça' } }))
+        finishStream = () => {
+          controller.enqueue(encode({ delta: { content: ' ve son.' }, finish_reason: 'stop' }))
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+          controller.close()
+        }
+      } }), { headers: { 'Content-Type': 'text/event-stream' } })
+    }
+    const enterMessage = async message => {
+      await evalJs(`(() => {
+        const text = document.querySelector('.eon-ai-composer textarea')
+        text.focus()
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(text, ${JSON.stringify(message)})
+        text.dispatchEvent(new Event('input', { bubbles: true }))
+      })()`)
+      await evalJs(`document.querySelector('.eon-ai-composer textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))`)
+    }
+    const waitFor = async (selector, expected) => {
+      for (let poll = 0; poll < 200; poll++) {
+        const text = await evalJs(`document.querySelector(${JSON.stringify(selector)})?.textContent`)
+        if (text && (!expected || expected.test(text))) return text
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+      assert.fail(`Missing ${selector}`)
+    }
+    // Refresh configured state through the real renderer after the direct IPC setup above.
+    window.webContents.reload()
+    await new Promise(resolve => window.webContents.once('did-finish-load', resolve))
+    await settle()
+    await evalJs(`document.querySelector('[aria-label="Rehberi kapat"]')?.click(); document.querySelector('.eon2-nav-item[title="Eon AI"]').click()`)
+    await settle()
+    await enterMessage('Bağlantı testi')
+    assert.match(await waitFor('.eon-ai-thinking', /Tekrar deneniyor/), /2\/5/)
+    assert.equal(await waitFor('.eon-ai-turn.is-assistant p'), 'İlk parça')
+    assert.equal(attempts, 2)
+    assert.equal(await evalJs(`Boolean(document.querySelector('[aria-label="Yanıtı durdur"]'))`), true)
+    finishStream()
+    assert.equal(await waitFor('.eon-ai-turn-markdown p'), 'İlk parça ve son.')
+    assert.equal(await evalJs(`document.querySelectorAll('.eon-ai-turn.is-user').length`), 1)
+    await fs.writeFile(path.join(output, 'ai-workspace.png'), (await window.webContents.capturePage()).toPNG())
+
+    step = 'final failure and draft recovery'
+    attempts = 0
+    globalThis.fetch = async (url, options) => {
+      if (url !== 'https://openrouter.ai/api/v1/chat/completions') return originalFetch(url, options)
+      attempts++
+      if (attempts === 5) await new Promise(resolve => setTimeout(resolve, 150))
+      return new Response(null, { status: 503 })
+    }
+    await enterMessage('Mesajı koru')
+    assert.match(await waitFor('.eon-ai-thinking', /5\/5/), /Tekrar deneniyor/)
+    assert.equal(await waitFor('.eon-ai-turn.is-error [role="alert"]'), 'Beş denemeden sonra yanıt alınamadı.')
+    assert.equal(attempts, 5)
+    await evalJs(`document.querySelector('.eon-ai-restore').click()`)
+    assert.equal(await evalJs(`document.querySelector('.eon-ai-composer textarea').value`), 'Mesajı koru')
+
+    step = 'new renderer sends through a pre-streaming desktop runtime'
+    ipcMain.removeHandler('eon2:ai:state')
+    ipcMain.handle('eon2:ai:state', () => ({ configured: true, model: 'test/model' }))
+    ipcMain.removeHandler('eon2:ai:send')
+    ipcMain.handle('eon2:ai:send', (_event, message) => {
+      assert.deepEqual(message, { content: 'Uyumluluk testi', model: 'test/model', history: [] })
+      return { reply: 'Eski ana süreç yanıtı.' }
+    })
+    window.webContents.reload()
+    await new Promise(resolve => window.webContents.once('did-finish-load', resolve))
+    await settle()
+    await evalJs(`document.querySelector('[aria-label="Rehberi kapat"]')?.click(); document.querySelector('.eon2-nav-item[title="Eon AI"]').click()`)
+    await settle()
+    await enterMessage('Uyumluluk testi')
+    assert.equal(await waitFor('.eon-ai-turn-markdown p'), 'Eski ana süreç yanıtı.')
   } finally {
     globalThis.fetch = originalFetch
   }

@@ -96,20 +96,43 @@
 .eon2-app .eon-mirror {
   --mirror-bg:#101925; --mirror-panel:rgba(27,39,56,.84); --mirror-panel-hi:#32445c;
   --mirror-border:rgba(219,235,255,.21); --mirror-ink:#f2f6fb; --mirror-subtle:#b7c7dc;
+  --deck-blue-light:#558de54d; --deck-violet-light:#8181cd3b;
+  --deck-edge-light:#ffffff42; --deck-edge-shadow:#070f2363;
 }
 .eon2-app.eon2-theme-light .eon-mirror {
   --mirror-bg:#e5eef7; --mirror-panel:rgba(250,253,255,.87); --mirror-panel-hi:#d5e2f0;
   --mirror-border:rgba(56,84,116,.22); --mirror-ink:#1c3047; --mirror-subtle:#4d637c;
+  --deck-blue-light:#90bff77a; --deck-violet-light:#b8b5f06b;
+  --deck-edge-light:#ffffffef; --deck-edge-shadow:#718ca129; --mirror-coral:#a6384f;
 }
 .eon2-app .eon-mirror-display {
-  background:linear-gradient(135deg,var(--mirror-bg),var(--mirror-panel-hi) 52%,var(--mirror-bg));
+  background:radial-gradient(ellipse 64% 90% at 17% 2%,var(--deck-blue-light),transparent),
+    radial-gradient(ellipse 62% 85% at 86% 85%,var(--deck-violet-light),transparent),var(--mirror-bg);
 }
-.eon2-app .eon-mirror-tile {
-  background-color:var(--mirror-panel); background-image:var(--glass-sheen);
-  border-color:var(--mirror-border);
-  box-shadow:inset 0 1px 0 var(--glass-light),0 6px 18px rgba(0,4,15,.12);
+.eon2-app .eon-mirror :is(.eon-mirror-tile,.eon-mirror-foot,.eon-mirror-quick-overlay,button[data-tone]) {
+  --deck-tint:var(--key-tint,var(--mirror-blue));
+  background-color:color-mix(in srgb,var(--mirror-panel) 76%,transparent);
+  background-image:linear-gradient(155deg,color-mix(in srgb,var(--deck-tint) 9%,transparent),transparent 58%),
+    var(--glass-sheen);
+  box-shadow:inset 0 1px 1px var(--deck-edge-light),inset 0 -2px 3px var(--deck-edge-shadow);
 }
-.eon2-app .eon-mirror-clock time { letter-spacing:-.04em; }
+.eon2-app .eon-mirror :is(.eon-mirror-foot,.eon-mirror-quick-overlay) {
+  backdrop-filter:var(--glass-filter);
+}
+.eon2-app .eon-mirror .eon-mirror-tile--shortcuts:has([data-quick-index]) {
+  background:transparent; box-shadow:none;
+}
+.eon2-app .eon-mirror button[data-tone] {
+  transition:transform 140ms;
+}
+.eon2-app .eon-mirror button[data-tone]:hover:not(:disabled) {
+  background-color:color-mix(in srgb,var(--deck-tint) 12%,var(--mirror-panel));
+}
+.eon2-app .eon-mirror button[data-tone]:active:not(:disabled) { transform:scale(.97); }
+.eon2-app .eon-mirror-foot button:not(.eon-mirror-phone-link) { color:var(--mirror-subtle); }
+.eon2-app .eon-mirror .eon-mirror-tile--media .eon-player-surface {
+  background-color:transparent; border-color:transparent; box-shadow:none;
+}
 .eon2-app .eon-player-surface {
   background-color:var(--mirror-panel); background-image:var(--glass-sheen);
   box-shadow:inset 0 1px 0 var(--glass-light);
@@ -127,17 +150,20 @@
 .eon2-app[data-material="opaque"] { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
 .eon2-app.eon2-theme-light[data-material="opaque"] { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
 .eon2-app[data-material="opaque"] :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+.eon2-app[data-material="opaque"] .eon-mirror :is(.eon-mirror-foot,.eon-mirror-quick-overlay,button[data-tone]) { background-color:var(--glass-content); }
 .eon2-app[data-material="opaque"] .eon-notes-workspace { backdrop-filter:none; }
 @media(prefers-reduced-transparency:reduce) {
   .eon2-app[data-material="system"] { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
   .eon2-app.eon2-theme-light[data-material="system"] { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
   .eon2-app[data-material="system"] :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+  .eon2-app[data-material="system"] .eon-mirror :is(.eon-mirror-foot,.eon-mirror-quick-overlay,button[data-tone]) { background-color:var(--glass-content); }
   .eon2-app[data-material="system"] .eon-notes-workspace { backdrop-filter:none; }
 }
 @media(prefers-contrast:more) {
   .eon2-app.eon2-app { --glass-chrome:#1c2330; --glass-content:#141b27; --glass-control:#293548; --glass-filter:none; --glass-sheen:none; }
   .eon2-app.eon2-theme-light { --glass-chrome:#f5f9ff; --glass-content:#fcfdff; --glass-control:#e7eef6; }
   .eon2-app :is(.eon-mirror-tile,.eon-player-surface) { background-color:var(--glass-content); }
+  .eon2-app .eon-mirror :is(.eon-mirror-foot,.eon-mirror-quick-overlay,button[data-tone]) { background-color:var(--glass-content); }
   .eon2-app .eon-notes-workspace { backdrop-filter:none; }
 }
 @supports not (backdrop-filter:blur(1px)) {

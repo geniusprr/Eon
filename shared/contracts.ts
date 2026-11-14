@@ -106,7 +106,13 @@ export const APP_EVENTS = {
 } as const
 
 export type AppEventName = (typeof APP_EVENTS)[keyof typeof APP_EVENTS]
-export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed' | 'eon2:ai:navigate' | 'eon2:theme:changed' | 'eon2:updates:changed'
+export type DesktopEventName = BrowserEventName | AppEventName | 'eon2:scrcpy:changed' | 'eon2:ai:navigate' | 'eon2:ai:progress' | 'eon2:theme:changed' | 'eon2:updates:changed'
+
+export type EonAiProgress = { requestId: string } & (
+  | { kind: 'text'; text: string }
+  | { kind: 'working' }
+  | { kind: 'retrying'; attempt: number; limit: number }
+)
 
 export interface BrowserBounds {
   x: number
@@ -478,6 +484,7 @@ export type IpcChannel =
   | 'eon2:ai:connect'
   | 'eon2:ai:models'
   | 'eon2:ai:send'
+  | 'eon2:ai:stop'
   | 'eon2:ai:pending'
   | 'eon2:ai:approve'
   | 'eon2:ai:reject'

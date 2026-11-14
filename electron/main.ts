@@ -12,7 +12,7 @@ import { LocalSendManager } from './LocalSendManager.js'
 import { NotificationListenerManager } from './NotificationListenerManager.js'
 import { OmniAgent } from './OmniAgent.js'
 import { RemoteDesktopManager } from './RemoteDesktopManager.js'
-import { SystemManager } from './SystemManager.js'
+import { SystemManager, windowsAppId } from './SystemManager.js'
 import { WindowManager } from './WindowManager.js'
 import { UpdateManager } from './UpdateManager.js'
 import { runBrowserLifecycleSmoke } from './browser-smoke.js'
@@ -25,7 +25,7 @@ const isBrowserSmokeTest = process.env.KAPANIS_SMOKE_TEST === '1'
 
 // Match the installer shortcut identity so Windows groups the running app
 // with its Eon shortcut and uses the packaged icon for the taskbar.
-if (process.platform === 'win32') app.setAppUserModelId('com.kapanis.desktop')
+if (process.platform === 'win32') app.setAppUserModelId(windowsAppId())
 
 // The smoke runner always uses an isolated profile. It must be able to start
 // beside a user's running app so the lifecycle and visual checks cannot turn
@@ -49,9 +49,12 @@ if (!isBrowserSmokeTest && !app.requestSingleInstanceLock()) {
   const eon2SystemTelemetry = new SystemTelemetry()
   let quitting = false
   let requestedExitCode = 0
+  let showWhenReady = false
 
   app.on('second-instance', (_event, commandLine) => {
-    windows?.showMain()
+    if (commandLine.includes('--background')) return
+    if (windows) windows.showMain()
+    else showWhenReady = true
     if (eon2Runtime) return
     const url = commandLine.find((value) => /^https?:\/\//i.test(value))
     if (url) send(BROWSER_EVENTS.openRequest, { url, sourceTabId: null })
@@ -62,7 +65,7 @@ if (!isBrowserSmokeTest && !app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
-    const devServer = process.env.ELECTRON_START_URL || (app.isPackaged ? null : 'http://127.0.0.1:5173')
+    const devServer = process.env.ELECTRON_START_URL
     const rendererTarget = devServer || pathToFileURL(path.join(app.getAppPath(), 'dist', 'index.html')).toString()
     const splashTarget = devServer || pathToFileURL(path.join(app.getAppPath(), 'dist', 'splash.html')).toString()
     // Normal launches use the new cloud-free runtime. The old implementation
@@ -70,11 +73,13 @@ if (!isBrowserSmokeTest && !app.requestSingleInstanceLock()) {
     if (!isBrowserSmokeTest && process.env.EON_LEGACY !== '1') {
       eon2Runtime = await startEon2Runtime(path.join(moduleDirectory, 'eon2', 'preload.cjs'), rendererTarget)
       windows = eon2Runtime.windows
+      if (showWhenReady) windows.showMain()
       return
     }
     windows = new WindowManager(path.join(moduleDirectory, 'preload.cjs'))
     windows.createSplash(splashTarget)
     const mainWindow = windows.createMainWindow(rendererTarget)
+    if (showWhenReady) windows.showMain()
     updater = new UpdateManager({
       getMainWindow: () => windows.getMainWindow(),
       reportStatus: (status) => windows.setSplashStatus(status),

@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.ArrowDropDown
@@ -217,7 +216,7 @@ internal fun EonAiScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(16.dp)) {
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium) {
                 Icon(Icons.Rounded.AutoAwesome, contentDescription = null,
                     modifier = Modifier.padding(11.dp).size(22.dp), tint = MaterialTheme.colorScheme.primary)
             }
@@ -282,14 +281,14 @@ internal fun EonAiScreen(
 
         if (!paired || (!state.configured && !state.loading)) {
             Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f),
-                shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                shape = eonPanelShape, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (!paired) "Önce PC ile eşleştir" else "Masaüstünde AI kurulumu gerekli",
                         fontWeight = FontWeight.SemiBold)
                     Text(if (!paired) "Asistan, eşleştirilmiş bilgisayarındaki uygulamaları ve kısayolları yönetebilir."
                         else "OpenRouter anahtarını ve kullanılacak modeli bilgisayarındaki Eon ayarlarından yapılandır.",
                         style = MaterialTheme.typography.bodySmall)
-                    if (!paired) Button(onClick = onConnect) { Text("Bağlantıyı aç") }
+                    if (!paired) Button(shape = MaterialTheme.shapes.medium, onClick = onConnect) { Text("Bağlantıyı aç") }
                 }
             }
         }
@@ -301,7 +300,7 @@ internal fun EonAiScreen(
         state.pending?.let { proposal ->
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(),
+                shape = eonPanelShape, modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("Komut kısayolu onayı", style = MaterialTheme.typography.titleMedium,
@@ -324,10 +323,10 @@ internal fun EonAiScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = { decidePending(false) },
+                        OutlinedButton(shape = MaterialTheme.shapes.medium, onClick = { decidePending(false) },
                             enabled = paired && !state.busy && !state.pendingBusy && !state.pendingLoading,
                             modifier = Modifier.weight(1f)) { Text("Reddet") }
-                        Button(onClick = { decidePending(true) },
+                        Button(shape = MaterialTheme.shapes.medium, onClick = { decidePending(true) },
                             enabled = paired && !state.busy && !state.pendingBusy && !state.pendingLoading,
                             modifier = Modifier.weight(1f)) {
                             Text(if (state.pendingBusy) "İşleniyor…" else "Kaydet")
@@ -367,7 +366,7 @@ internal fun EonAiScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start) {
                     Surface(
                         color = if (message.fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth(.92f),
+                        shape = eonPanelShape, modifier = Modifier.fillMaxWidth(.92f),
                     ) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text(if (message.fromUser) "Sen" else "Eon", fontSize = 11.sp,
@@ -400,7 +399,7 @@ internal fun EonAiScreen(
                 maxLines = 4, enabled = paired && state.configured && !state.busy && !state.pendingBusy,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send() }),
-                shape = RoundedCornerShape(18.dp),
+                shape = eonPanelShape,
             )
             IconButton(onClick = { send() }, enabled = paired && state.configured && !state.busy && !state.pendingBusy && state.draft.isNotBlank()) {
                 Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Komutu gönder",

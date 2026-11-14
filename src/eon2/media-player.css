@@ -58,9 +58,16 @@
 .eon-player-volume-panel>strong { font-size:15px; }
 .eon-player-volume-panel>p { font-size:12px; color:var(--e-muted); margin:6px 0 0; }
 @container media-player (min-width:440px) and (min-height:180px) {
-  .eon-player-content { display:grid; grid-template-columns:minmax(0,1fr); align-content:center; }
-  .eon-player-track { gap:20px; }
-  .eon-player-cover { width:clamp(96px,30cqw,184px); }
+  .eon-player-content {
+    --cover-size:clamp(96px,min(33cqw,calc(100cqh - 30px)),184px);
+    display:grid; grid-template-columns:var(--cover-size) minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr) auto auto minmax(0,1fr);
+    height:100%; gap:0 20px; align-items:center;
+  }
+  .eon-player-track { display:contents; }
+  .eon-player-cover { width:var(--cover-size); grid-area:1 / 1 / -1; }
+  .eon-player-metadata { grid-area:2 / 2; }
+  .eon-player-transport { grid-area:3 / 2; }
 }
 @container media-player (max-width:220px) or (max-height:180px) {
   .eon-player-content { padding:8px; gap:8px; }

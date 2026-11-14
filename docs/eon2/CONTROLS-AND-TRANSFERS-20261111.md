@@ -42,3 +42,11 @@ The desktop process already running on port 8768 was an older build: its action 
 Restart Eon with the current build before testing physical transfer in both directions, approving phone edits on PC and executing a harmless command. Windows lock/shutdown/restart were not executed during verification. Live Tailscale HTTPS transfer, VPN loss/reconnect, full-file interruption/resume, process-crash recovery, full-size throughput, screen-reader acceptance and mobile font scaling remain unverified. Transfer queue state is currently process-local; after restart a new offer is required and interrupted `.part` files from an abrupt crash may need cleanup. Native LocalSend integration remains outstanding as described above.
 
 No commit, push, deployment, production install or release was performed.
+
+## 14 Kasım 2026 · Mobil Kısayollar
+
+- Dikey Kontrol ekranının yerini Kısayollar sekmesi aldı. Kayıtlı komutlar ve Windows araçları aynı ekranda aranıp çalıştırılabiliyor. Kısayol ekleme ve düzenleme mevcut PC deposunu, dikey ve yatay ekranlar aynı komut ve izin modelini kullanıyor. PC ekranına Ayarlar üzerinden, medya denetimlerine yatay Deck üzerinden erişiliyor.
+- Android debug APK, lint ve 15 birim testi geçti. Komut Windows yol kodlaması nedeniyle Android projesi `Q:` üzerinden eşlendikten sonra çalıştırıldı. Görevler `:app:assembleDebug :app:lintDebug :app:testDebugUnitTest`, çıkış 0. AndroidTest paketi derlendi. Projede bu pakette çalıştırılacak test kaynağı bulunmuyor.
+- Windows `npm run build` ve `npm run test:eon2` çıkış 0, 115 test geçti. İzole Electron Deck önizleme testi de çıkış 0. Testin USB dinleyicisi mevcut Eon süreci portu kullandığından devreye girmedi.
+- Vivo V2205, Android 14 üzerinde debug APK ve gerçek USB kısayol listesi, koyu tema, PC ekranına girip geri dönme, Local Send sekmesi ve iki yönlü Deck dönüşü doğrulandı. Android 15 emülatöründe açık tema, yüzde 200 yazı boyutu, arama, form doğrulaması, Windows bağlantısı (.lnk) oluşturma ve düzenleme, izin kaybı ve yükleme hatasından toparlanma doğrulandı. Komut yürütme ve zamanlı başlatma/iptal çağrıları izole PC sürecinde simüle edildi.
+- TalkBack, Tailscale ve gerçek güç komutu yürütme doğrulanmadı.

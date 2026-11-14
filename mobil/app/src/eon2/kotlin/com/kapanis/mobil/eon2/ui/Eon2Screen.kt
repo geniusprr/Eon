@@ -13,7 +13,6 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,7 +36,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -86,15 +84,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,8 +106,6 @@ import com.kapanis.mobil.eon2.network.EonUsbClient
 import com.kapanis.mobil.eon2.network.UsbPrompt
 import com.kapanis.mobil.eon2.network.DesktopSettings
 import com.kapanis.mobil.eon2.network.ReleaseUpdater
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.kapanis.mobil.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -120,7 +114,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class EonTab(val label: String, val icon: ImageVector) {
-    Controls("Kontrol", Icons.Rounded.Bolt),
+    // Preserve the destination key saved by earlier versions.
+    Controls("Kısayollar", Icons.Rounded.Bolt),
     Ai("Asistan", Icons.Rounded.AutoAwesome),
     LocalSend("Local Send", Icons.Rounded.SwapHoriz),
     Notes("Notlar", Icons.Rounded.NoteAlt),
@@ -130,10 +125,6 @@ private enum class EonTab(val label: String, val icon: ImageVector) {
 private val portraitTabs = listOf(EonTab.Controls, EonTab.Ai, EonTab.LocalSend, EonTab.Notes)
 private const val portraitSlotCount = 5
 private const val rotationSlot = 2
-
-private enum class ControlPage { Overview, Actions, Remote }
-
-private val Green = Color(0xFF7BD2A4)
 
 /** Avoid re-rendering the portrait UI for fresh JSONObject instances with unchanged connection data. */
 private fun EonPeerStatus.samePresentationAs(other: EonPeerStatus, includeSystem: Boolean): Boolean =
@@ -166,7 +157,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
     val receivedFiles by downloads.receivedFiles.collectAsStateWithLifecycle()
     val transferSnackbar = remember { SnackbarHostState() }
     var lastMainTab by rememberSaveable { mutableStateOf(EonTab.Controls) }
-    var controlPage by remember { mutableStateOf(ControlPage.Overview) }
+    var remoteOpen by rememberSaveable { mutableStateOf(false) }
     var peer by remember { mutableStateOf(EonPeerStatus(false, "Bilgisayar aranıyor", false)) }
     var notes by remember { mutableStateOf<List<EonLocalNote>>(emptyList()) }
     var selected by remember { mutableStateOf<EonLocalNote?>(null) }
@@ -179,6 +170,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
     var settingsBusy by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var pairingMessage by remember { mutableStateOf<String?>(null) }
     var foreground by remember { mutableStateOf(true) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -285,7 +277,7 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                     if (state != "pending") {
                         outgoingToken = null
                         if (state == "approved") peer = withContext(Dispatchers.IO) { client.detect() }
-                        message = when (state) {
+                        pairingMessage = when (state) {
                             "approved" -> "Bilgisayar eşleştirmeyi kabul etti."
                             "denied" -> "Bilgisayar eşleştirmeyi reddetti."
                             else -> "Eşleştirme isteğinin süresi doldu."
@@ -344,9 +336,27 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                 val state = withContext(Dispatchers.IO) { client.answerPairing(prompt, accepted, token) }
                 pairingPrompt = null
                 if (state == "approved") peer = withContext(Dispatchers.IO) { client.detect() }
-                message = if (state == "approved") "Cihaz eşleştirildi." else "Eşleştirme reddedildi."
+                pairingMessage = if (state == "approved") "Cihaz eşleştirildi." else "Eşleştirme reddedildi."
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { pairingPrompt = null; message = error.message ?: "Eşleştirme tamamlanamadı." }
+            catch (error: Exception) { pairingPrompt = null; pairingMessage = error.message ?: "Eşleştirme tamamlanamadı." }
+            finally { answering = false }
+        }
+    }
+
+    val pairingBusy = answering || outgoingToken != null
+    fun requestPairing() {
+        if (pairingBusy || !peer.connected || peer.paired || peer.transport != "usb") return
+        answering = true
+        scope.launch {
+            try {
+                val token = client.newPairingToken()
+                val state = withContext(Dispatchers.IO) { client.requestPairing(token) }
+                if (state == "pending") {
+                    outgoingToken = token
+                    pairingMessage = "İsteği bilgisayar ekranında kabul et veya reddet."
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { pairingMessage = error.message ?: "Eşleştirme isteği gönderilemedi." }
             finally { answering = false }
         }
     }
@@ -361,16 +371,14 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         )
     }
 
-    BackHandler(enabled = !landscape && (tab == EonTab.Settings || selected != null || createNew ||
-        (tab == EonTab.Controls && controlPage != ControlPage.Overview))) {
+    BackHandler(enabled = !landscape && !remoteOpen && (tab == EonTab.Settings || selected != null || createNew)) {
         if (tab == EonTab.Settings) tab = lastMainTab
-        else if (tab == EonTab.Controls && controlPage != ControlPage.Overview) controlPage = ControlPage.Overview
         else { selected = null; selectedConflict = null; createNew = false }
     }
     val pageStates = rememberSaveableStateHolder()
-    if (tab == EonTab.Controls && controlPage == ControlPage.Remote) {
+    if (remoteOpen) {
         PcRemoteScreen(client, peer, foreground,
-            onBack = { controlPage = ControlPage.Overview },
+            onBack = { remoteOpen = false },
             onRotate = { requestOrientation(if (landscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) })
         return
     }
@@ -381,7 +389,6 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
             foreground = foreground,
             onConnect = {
                 tab = EonTab.Controls
-                controlPage = ControlPage.Overview
                 selected = null
                 selectedConflict = null
                 createNew = false
@@ -407,32 +414,25 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         topBar = {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-                    Image(painterResource(R.drawable.eon_launcher_foreground), "Eon logosu", modifier = Modifier.fillMaxSize())
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    UpdateBadge(updateState) { if (tab != EonTab.Settings) lastMainTab = tab; tab = EonTab.Settings }
-                    Surface(modifier = Modifier.eonGlass(RoundedCornerShape(20.dp)), color = Color.Transparent,
-                        shape = RoundedCornerShape(20.dp)) {
-                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(7.dp).clip(CircleShape).background(if (peer.connected && peer.paired) Green else Color(0xFFCFA47D)))
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (peer.connected && peer.paired) "Bağlı" else "Yerel", fontSize = 11.sp)
-                        }
+            EonMobileHeader(
+                connected = peer.connected,
+                paired = peer.paired,
+                transport = peer.transport,
+                update = updateState,
+                settingsOpen = tab == EonTab.Settings,
+                settingsEnabled = !noteEditor,
+                onOpenUpdate = {
+                    if (tab != EonTab.Settings) lastMainTab = tab
+                    tab = EonTab.Settings
+                },
+                onToggleSettings = {
+                    if (tab == EonTab.Settings) tab = lastMainTab
+                    else {
+                        lastMainTab = tab
+                        tab = EonTab.Settings
                     }
-                    IconButton(onClick = {
-                        if (tab == EonTab.Settings) tab = lastMainTab
-                        else { lastMainTab = tab; tab = EonTab.Settings }
-                    }, enabled = !noteEditor, modifier = Modifier.size(48.dp).semantics {
-                        this.selected = tab == EonTab.Settings
-                    }) {
-                        Icon(Icons.Rounded.Settings, "Ayarlar", tint = if (tab == EonTab.Settings)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+                },
+            )
         },
 
     ) { padding ->
@@ -442,30 +442,9 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         when (tab) {
             EonTab.Ai -> EonAiScreen(client, peer.connected && peer.paired, aiChatState, scope,
                 contentModifier, bottomClearance, onConnect = { tab = EonTab.Controls })
-            EonTab.LocalSend -> PcControlsScreen(client, true, contentModifier, bottomClearance,
-                receivedFiles = receivedFiles, onBack = { tab = EonTab.Controls })
-            EonTab.Controls -> when (controlPage) {
-                ControlPage.Remote -> Unit
-                ControlPage.Actions -> PcControlsScreen(client, false, contentModifier, bottomClearance, onBack = { controlPage = ControlPage.Overview })
-                ControlPage.Overview -> ControlsContent(contentModifier, client, peer, message, answering || outgoingToken != null, bottomClearance,
-                    onPair = {
-                        scope.launch {
-                            val token = client.newPairingToken()
-                            answering = true
-                            try {
-                                val state = withContext(Dispatchers.IO) { client.requestPairing(token) }
-                                if (state == "pending") {
-                                    outgoingToken = token
-                                    message = "İsteği bilgisayar ekranında kabul et veya reddet."
-                                }
-                            } catch (cancelled: CancellationException) { throw cancelled }
-                            catch (error: Exception) { message = error.message ?: "Eşleştirme isteği gönderilemedi." }
-                            finally { answering = false }
-                        }
-                    },
-                    onOpenPcActions = { controlPage = ControlPage.Actions },
-                    onOpenPcRemote = { controlPage = ControlPage.Remote })
-            }
+            EonTab.LocalSend -> LocalSendScreen(client, receivedFiles, bottomClearance, contentModifier)
+            EonTab.Controls -> ShortcutsScreen(client, peer, pairingBusy, pairingMessage, bottomClearance,
+                onPair = ::requestPairing, modifier = contentModifier)
             EonTab.Notes -> if (selected?.conflict == true && selectedConflict == null) {
                 Column(contentModifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
                     Text(message ?: "Not sürümleri yükleniyor…")
@@ -522,11 +501,21 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
                 }
                 if (!canManagePc && !settingsBusy) Text("PC ayarlarını telefondan değiştirmek için USB ile bağlan.",
                     style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick={scope.launch { doSync() }}, enabled=peer.connected && peer.paired && !syncing) {
+                OutlinedButton(shape = MaterialTheme.shapes.medium, onClick={scope.launch { doSync() }}, enabled=peer.connected && peer.paired && !syncing) {
                     Text(if(syncing) "Eşitleniyor…" else "Notları şimdi eşitle")
                 }
                 Text("Notlar bağlıyken otomatik eşitlenir.", style=MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick={tab=EonTab.Controls}) { Text("Bağlantıyı yönet") }
+                if (peer.connected && !peer.paired && peer.transport == "usb") {
+                    Button(onClick = ::requestPairing, enabled = !pairingBusy, shape = MaterialTheme.shapes.medium) {
+                        Text("Bilgisayarla eşleştir")
+                    }
+                }
+                pairingMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                OutlinedButton(shape = MaterialTheme.shapes.medium, onClick = { remoteOpen = true }) {
+                    Icon(Icons.Rounded.DesktopWindows, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("PC ekranı")
+                }
                 message?.let { Text(it, style=MaterialTheme.typography.bodyMedium) }
             }
         }
@@ -539,7 +528,6 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
         FloatingEonNavigation(tab, Modifier.align(Alignment.BottomCenter).onSizeChanged { navigationHeight = it.height },
             onRotate = { requestOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }) { destination ->
             tab = destination
-            controlPage = ControlPage.Overview
             selected = null
             selectedConflict = null
             createNew = false
@@ -553,31 +541,40 @@ fun Eon2Screen(theme: String, onTheme: (String) -> Unit) {
 
 @Composable
 internal fun EonCard(modifier:Modifier=Modifier, content:@Composable ()->Unit) {
-    Surface(modifier.eonGlass(), color=Color.Transparent, shape=RoundedCornerShape(24.dp)) { content() }
+    Surface(modifier.eonGlass(), color=Color.Transparent, shape=eonPanelShape) { content() }
 }
 
 @Composable
-internal fun EonRotationButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+internal fun EonRotationButton(label: String, onClick: () -> Unit, prominent: Boolean = false, enabled: Boolean = true) {
     val colors = MaterialTheme.colorScheme
-    Box(modifier.size(48.dp).clip(RoundedCornerShape(17.dp))
-        .clickable(enabled = enabled, onClickLabel = label, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(39.dp).background(colors.primaryContainer, RoundedCornerShape(14.dp))
-            .border(1.dp, colors.primary.copy(alpha = .55f), RoundedCornerShape(14.dp)))
-        Image(painterResource(R.drawable.eon_launcher_foreground), null,
-            modifier = Modifier.align(Alignment.Center).offset(x = (-3).dp, y = (-2).dp).size(34.dp))
-        Box(Modifier.align(Alignment.BottomEnd).size(21.dp).background(colors.primary, CircleShape),
-            contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.ScreenRotation, label, tint = colors.onPrimary, modifier = Modifier.size(14.dp))
+    val shape = RoundedCornerShape(12.dp)
+    val tint = if (prominent) colors.onPrimary else colors.onPrimaryContainer
+    Box(
+        Modifier.size(if (prominent) 56.dp else 48.dp).clip(shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(if (prominent) 50.dp else 38.dp)
+                .background(if (prominent) colors.primary else colors.primaryContainer, shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.ScreenRotation, label,
+                tint = if (enabled) tint else tint.copy(alpha = .38f),
+                modifier = Modifier.size(if (prominent) 32.dp else 24.dp),
+            )
         }
     }
 }
 
 @Composable
 private fun FloatingEonNavigation(selected: EonTab, modifier: Modifier, onRotate: () -> Unit, onSelect: (EonTab) -> Unit) {
+    val largeText = LocalDensity.current.fontScale >= 1.5f
     Box(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center) {
-        val barShape = RoundedCornerShape(32.dp)
-        val indicatorShape = RoundedCornerShape(26.dp)
+        val barShape = eonPanelShape
+        val indicatorShape = MaterialTheme.shapes.medium
         Surface(
             modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().eonGlass(barShape, prominent = true),
             shape = barShape, color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface,
@@ -600,7 +597,7 @@ private fun FloatingEonNavigation(selected: EonTab, modifier: Modifier, onRotate
                     for (slot in 0 until portraitSlotCount) {
                         if (slot == rotationSlot) {
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                EonRotationButton("Deck'i yatay aç", onRotate)
+                                EonRotationButton("Deck'i yatay aç", onRotate, prominent = true)
                             }
                             continue
                         }
@@ -615,7 +612,11 @@ private fun FloatingEonNavigation(selected: EonTab, modifier: Modifier, onRotate
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Icon(destination.icon, null, tint = tint, modifier = Modifier.size(21.dp))
-                            Text(destination.label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            Text(destination.label, fontSize = if (largeText) 7.5.sp else 11.sp,
+                                lineHeight = if (largeText) 10.sp else 14.sp,
+                                letterSpacing = if (largeText) 0.sp else .1.sp,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = tint)
                         }
                     }
@@ -686,7 +687,7 @@ private fun EonConflictEditor(
         Spacer(Modifier.height(8.dp))
         if(!message.isNullOrBlank()) Text(message,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=11.sp)
         Button(onClick={onResolve(chosenId,title,body,isChoosingDeletion,if(conflict.pathCollision) path else null)},enabled=conflict.pendingRevisionIds.isEmpty() && (conflict.heads.size>=2 || conflict.pathCollision),
-            modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(11.dp)) {
+            modifier=Modifier.fillMaxWidth(),shape=MaterialTheme.shapes.medium) {
             Icon(if(isChoosingDeletion) Icons.Rounded.DeleteOutline else Icons.Rounded.Save,null,Modifier.size(17.dp));Spacer(Modifier.width(8.dp));Text(if(isChoosingDeletion) "Silme kararını uygula" else "Çözümü güvenle kaydet")
         }
         Text("Önceki sürümler revizyon geçmişinde saklanır.",fontSize=10.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)

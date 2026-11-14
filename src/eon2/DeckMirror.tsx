@@ -5,9 +5,9 @@ import { MediaPlayer } from './MediaPlayer'
 import type { DeckMediaSample } from '../../shared/eon-deck-telemetry'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import {
-  Grip, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Command,
-  ChartNoAxesColumn, ExternalLink, Folder, LayoutTemplate, LockKeyhole, Smartphone, SlidersHorizontal,
-  Plus, Power, RotateCcw, Save, Settings2, Square, Terminal, TimerOff, X,
+  Grip, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Command,
+  ChartNoAxesColumn, ExternalLink, Folder, LayoutTemplate, LockKeyhole, SlidersHorizontal, LayoutGrid,
+  Plus, Power, RotateCcw, RotateCw, Save, Settings2, Square, Terminal, TimerOff, X,
 } from 'lucide-react'
 import type { IpcChannel } from '../../shared/contracts'
 import {
@@ -61,7 +61,6 @@ function rounded(value: number | null | undefined): number | null {
 }
 function Clock({ now }: { now: Date }) {
   return <div className="eon-mirror-clock">
-    <span>BUGÜN / ÇALIŞMA ALANI</span>
     <time dateTime={now.toISOString()}>{now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</time>
     <small>{now.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' })}</small>
   </div>
@@ -73,8 +72,9 @@ function CircleGauge({ label, percent, tone, detail }: { label: string; percent:
     <div className="eon-mirror-ring" role="progressbar" aria-valuemin={0} aria-valuemax={100}
       aria-valuenow={val ?? undefined} aria-valuetext={val === null ? 'Veri yok' : `%${val}`} aria-label={`${label} kullanımı`}>
       <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle className="ring-track" cx="50" cy="50" r="40"/>
-        <circle className="ring-value" cx="50" cy="50" r="40" strokeDasharray={`${val === null ? 0 : val * 2.513274} 251.3274`}/>
+        <path className="ring-track" d="M 21.7 78.3 A 40 40 0 1 1 78.3 78.3" pathLength="100"/>
+        {val !== null && val > 0 && <path className="ring-value" d="M 21.7 78.3 A 40 40 0 1 1 78.3 78.3"
+          pathLength="100" strokeDasharray={`${val} 100`}/>}
       </svg>
       <b>{val === null ? '—' : `${val}%`}</b>
     </div>
@@ -90,7 +90,7 @@ function MirrorShortcut({ item, busy, hideName, onClick, quickIndex, phoneTile =
   const label = countdown ? `${item.name} · Durdur` : item.name
   const tone = locked ? 'muted' : countdown ? 'mint' : keyTones[item.kind] ?? 'blue'
   return <button type="button" disabled={busy || (!phoneTile && !item.available)} data-quick-index={quickIndex}
-    className={countdown ? 'eon-mirror-shortcut-active' : undefined} data-tone={phoneTile ? tone : undefined}
+    className={countdown ? 'eon-mirror-shortcut-active' : undefined} data-tone={tone}
     data-locked={locked || undefined} data-icon-only={hideName && !countdown || undefined}
     title={label} aria-label={locked ? `${label} · İzin gerekli` : label} onClick={onClick}>
     <Icon className="eon-mirror-key-icon" aria-hidden="true" size={22}/>
@@ -519,6 +519,10 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
                 onKeyDown={event => { if (event.target === event.currentTarget) keyboardMove(event, tile) }}
                 style={{
                   gridColumn: `${tile.x + 1} / span ${tile.w}`, gridRow: `${tile.y + 1} / span ${tile.h}`,
+                  marginInlineStart: tile.x === 0 ? 0 : undefined,
+                  marginInlineEnd: tile.x + tile.w === DECK_COLUMNS ? 0 : undefined,
+                  marginBlockStart: tile.y === 0 ? 0 : undefined,
+                  marginBlockEnd: tile.y + tile.h === DECK_ROWS ? 0 : undefined,
                 }}>
                 <MirrorContent id={tile.id} snapshot={snapshot} data={deck} now={now} busy={busy} paired={connected > 0} quickIds={activeQuickIds} hideShortcutNames={hideShortcutNames}
                   mediaCommand={id => void run('eon2:deck:execute', { id }, 'Medya')}
@@ -575,26 +579,29 @@ export function DeckMirror({ snapshot, devices, now, navigate }: Props) {
           </div>}
           <div className="eon-mirror-foot">
             <button type="button" className="eon-mirror-phone-link" title="Telefon ekranını aç" aria-label="Telefon ekranını aç"
-              onClick={() => navigate('devices')}><img src="./eon.svg" alt=""/><Smartphone size={12}/></button>
+              onClick={() => navigate('devices')}><RotateCw size={24} aria-hidden="true"/></button>
             <div className="eon-mirror-foot-status" role="status">
               <span className={connected ? 'is-connected' : ''}/>
               <span>{message || (connected ? snapshot?.hostname || 'Bağlı' : 'Çevrimdışı')}</span>
             </div>
             {!editMode && <nav className="eon-mirror-key-pages" aria-label="Deck sekme çubuğu">
               <button type="button" aria-label="Önceki ekran" disabled={saving || naming !== null || screenIndex <= 0}
-                onClick={() => setSelectedPage(screenIds[screenIndex - 1])}><ArrowLeft size={15}/></button>
-              <select aria-label="Deck ekranına geç" value={selectedPage} disabled={saving || naming !== null}
-                onChange={event => setSelectedPage(event.target.value)}>
-                <option value="panel">Deck</option>
-                {pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
-                <option value="keys">Kısayollar</option>
-              </select>
+                onClick={() => setSelectedPage(screenIds[screenIndex - 1])}><ChevronLeft size={15}/></button>
+              <div className="eon-mirror-page-picker">
+                <select aria-label="Deck ekranına geç" value={selectedPage} disabled={saving || naming !== null}
+                  onChange={event => setSelectedPage(event.target.value)}>
+                  <option value="panel">Deck</option>
+                  {pages.map(page => <option key={page.id} value={page.id}>{page.name}</option>)}
+                  <option value="keys">Kısayollar</option>
+                </select>
+                <ChevronDown size={12} aria-hidden="true"/>
+              </div>
               <button type="button" aria-label="Sonraki ekran" disabled={saving || naming !== null || screenIndex >= screenIds.length - 1}
-                onClick={() => setSelectedPage(screenIds[screenIndex + 1])}><ArrowRight size={15}/></button>
+                onClick={() => setSelectedPage(screenIds[screenIndex + 1])}><ChevronRight size={15}/></button>
               {isKeys && <button type="button" aria-label={denseKeys ? '4 sütunlu dizilime geç' : '5 sütunlu dizilime geç'}
                 onClick={() => setDenseKeys(!denseKeys)}>{denseKeys ? '5 sütun' : '4 sütun'}</button>}
               {!isKeys && <button type="button" aria-label="Panel bileşenlerini düzenle" disabled={!layoutReady || saving || naming !== null}
-                onClick={openEditor}><Grip size={15}/></button>}
+                onClick={openEditor}><LayoutGrid size={15}/></button>}
               <button type="button" aria-label={isKeys ? 'Kısayollar ekranını düzenle' : 'Altı hızlı eylemi seç ve sırala'}
                 disabled={!layoutReady || saving || naming !== null || (isKeys && !deck)}
                 onClick={() => { openEditor(); setEditingQuick(true) }}><SlidersHorizontal size={15}/></button>

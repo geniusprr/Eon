@@ -20,11 +20,22 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+internal val eonPanelRadius = 14.dp
+internal val eonPanelShape = RoundedCornerShape(eonPanelRadius)
+
+private val eonShapes = Shapes(
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(10.dp),
+    large = eonPanelShape,
+    extraLarge = RoundedCornerShape(18.dp),
+)
 
 /** All five themes share the same semantic roles, including Material container colors. */
 @Composable
@@ -76,10 +87,7 @@ internal fun EonTheme(theme: String, content: @Composable () -> Unit) {
             labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
         )
     }
-    MaterialTheme(colorScheme = colors, typography = typography, shapes = Shapes(
-        small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(16.dp),
-        large = RoundedCornerShape(24.dp), extraLarge = RoundedCornerShape(32.dp),
-    ), content = content)
+    MaterialTheme(colorScheme = colors, typography = typography, shapes = eonShapes, content = content)
 }
 
 /** Static wash: a single cached draw instead of sampling the whole screen for each tile. */
@@ -101,7 +109,7 @@ internal fun EonGlassBackdrop(content: @Composable () -> Unit) {
 /** Retain the optical edge and tint without expensive offscreen blur/lens passes. */
 @Composable
 internal fun Modifier.eonGlass(
-    shape: RoundedCornerShape = RoundedCornerShape(24.dp),
+    shape: Shape = eonPanelShape,
     prominent: Boolean = false,
 ): Modifier {
     val scheme = MaterialTheme.colorScheme

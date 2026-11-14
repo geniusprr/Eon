@@ -43,7 +43,6 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   let companionUpdates: CompanionUpdater | undefined
   const tailnetSettingsPath = path.join(storage, 'tailnet-settings.json')
   const themePath = path.join(storage, 'theme.json')
-  const loginArgs = app.isPackaged ? ['--background'] : [`"${app.getAppPath()}"`, '--background']
   let sharedTheme: AppTheme | null = null
   try {
     const saved: unknown = JSON.parse(fs.readFileSync(themePath, 'utf8'))
@@ -183,7 +182,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return {
       theme: sharedTheme,
       tailscale: tailnetEnabled,
-      autostart: process.platform === 'win32' && app.getLoginItemSettings({ path: process.execPath, args: loginArgs }).openAtLogin,
+      autostart: process.platform === 'win32' && power.getAutostart(),
     }
   }
   async function updateSettings(value: unknown, canManageWindows: boolean) {
@@ -198,8 +197,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
         if (renderer && !renderer.isDestroyed()) renderer.send('eon2:theme:changed', next)
       }
     } else if (canManageWindows && key === 'autostart' && typeof next === 'boolean' && process.platform === 'win32') {
-      app.setLoginItemSettings({ openAtLogin: next, path: process.execPath, args: loginArgs })
-      if (settingsSnapshot().autostart !== next) throw new Error('Windows başlangıç ayarı kaydedilemedi.')
+      power.setAutostart(next)
     } else if (canManageWindows && key === 'tailscale' && typeof next === 'boolean') {
       persistTailnetSetting(next)
       void applyTailnetSetting().catch(() => { tailnetReason = 'Tailscale ayarı uygulanamadı.' })
@@ -455,7 +453,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   handle('eon2:actions:save', payload => actions.save(payload))
   handle('eon2:actions:delete', payload => actions.remove(readTextField(payload, 'id', 90)))
   handle('eon2:actions:execute', payload => actions.execute(readTextField(payload, 'id', 90)))
-  handle('eon2:ai:state', () => ai!.state())
+  handle('eon2:ai:state', () => ({ ...ai!.state(), streaming: true }))
   handle('eon2:ai:configure', payload => ai!.configure(payload))
   handle('eon2:ai:connect', async () => {
     if (!safeStorage.isEncryptionAvailable() || safeStorage.getSelectedStorageBackend?.() === 'basic_text') {
@@ -464,7 +462,29 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return ai!.configure({ apiKey: await connectOpenRouter(url => shell.openExternal(url)) })
   })
   handle('eon2:ai:models', () => ai!.models())
-  handle('eon2:ai:send', payload => ai!.send(payload))
+  let desktopAiRequest: { id: string; controller: AbortController } | undefined
+  contents.once('destroyed', () => desktopAiRequest?.controller.abort())
+  handle('eon2:ai:send', async payload => {
+    if (!payload || typeof payload !== 'object' || !('requestId' in payload)) return ai!.send(payload)
+    const { requestId, ...message } = payload
+    if (typeof requestId !== 'string' || !/^[a-f0-9-]{36}$/i.test(requestId)) throw new Error('Geçersiz AI istek kimliği.')
+    if (desktopAiRequest) throw new Error('Önceki AI isteği henüz tamamlanmadı.')
+    const controller = new AbortController()
+    desktopAiRequest = { id: requestId, controller }
+    try {
+      return await ai!.send(message, undefined, {
+        requestId,
+        signal: controller.signal,
+        progress: event => { if (!contents.isDestroyed()) contents.send('eon2:ai:progress', event) },
+      })
+    } finally {
+      desktopAiRequest = undefined
+    }
+  })
+  handle('eon2:ai:stop', payload => {
+    const id = readTextField(payload, 'requestId', 36)
+    if (desktopAiRequest?.id === id) desktopAiRequest.controller.abort()
+  })
   handle('eon2:ai:pending', () => ai!.pending())
   handle('eon2:ai:approve', payload => ai!.approve(readTextField(payload, 'id', 90)))
   handle('eon2:ai:reject', payload => ({ ok: ai!.reject(readTextField(payload, 'id', 90)) }))
@@ -673,7 +693,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       for (const channel of ['window:minimize', 'window:toggle-maximize', 'window:is-maximized', 'window:close', 'window:show',
         'eon2:theme:set', 'eon2:settings:get', 'eon2:settings:set', 'eon2:settings:import', 'eon2:settings:export', 'eon2:files:drop', 'eon2:actions:drop', 'eon2:pairing:state',
         'eon2:actions:list', 'eon2:actions:save', 'eon2:actions:delete', 'eon2:actions:execute', 'eon2:actions:pick-app',
-        'eon2:ai:state', 'eon2:ai:configure', 'eon2:ai:connect', 'eon2:ai:models', 'eon2:ai:send',
+        'eon2:ai:state', 'eon2:ai:configure', 'eon2:ai:connect', 'eon2:ai:models', 'eon2:ai:send', 'eon2:ai:stop',
         'eon2:ai:pending', 'eon2:ai:approve', 'eon2:ai:reject',
         'eon2:files:list', 'eon2:files:offer', 'eon2:files:cancel', 'eon2:permissions:set',
         'eon2:files:directory', 'eon2:files:choose-directory', 'eon2:files:open-directory', 'eon2:files:open', 'eon2:files:save-as',

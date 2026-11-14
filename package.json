@@ -50,6 +50,7 @@
     "d3-zoom": "^3.0.0",
     "date-fns": "4.4.0",
     "electron-updater": "^6.8.9",
+    "eventsource-parser": "^3.1.1",
     "js-yaml": "^5.3.0",
     "koffi": "^3.1.6",
     "lucide-react": "^0.468.0",

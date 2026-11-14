@@ -148,7 +148,7 @@ export function DevicesPane({ devices, error, refreshing, refresh, serverReady, 
       <details className="eon2-devices-disclosure">
         <summary><MonitorPlay size={18} aria-hidden="true"/><span>PC ekran paylaşımı</span><ChevronDown size={16} aria-hidden="true"/></summary>
         <div className="eon2-devices-detail-body">
-          <p>Eşleştirilmiş telefonda Kontrol → PC ekranı bölümünü aç. Telefon ekran paylaşımı istediğinde burada görüntüye veya görüntüyle birlikte fare ve klavyeye izin verebilirsin.</p>
+          <p>Eşleştirilmiş telefonda Ayarlar → PC ekranı bölümünü aç. Telefon ekran paylaşımı istediğinde burada görüntüye veya görüntüyle birlikte fare ve klavyeye izin verebilirsin.</p>
           <p>Paylaşım sırasında Windows ekranındaki göstergeden kontrolü kapatabilir veya oturumu bitirebilirsin.</p>
         </div>
       </details>

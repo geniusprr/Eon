@@ -43,7 +43,7 @@ import org.json.JSONObject
 /** Local bounded artwork only. Decode away from composition and only when the cover changes. */
 @Composable
 internal fun EonMediaPlayer(media: JSONObject?, enabled: Boolean, detail: String,
-    onMedia: (String, String) -> Unit, modifier: Modifier = Modifier) {
+    onMedia: (String, String) -> Unit, modifier: Modifier = Modifier, deck: Boolean = false) {
     val artwork = media?.optString("artwork").orEmpty()
     val bitmap by produceState<android.graphics.Bitmap?>(null, artwork) {
         value = null
@@ -81,7 +81,8 @@ internal fun EonMediaPlayer(media: JSONObject?, enabled: Boolean, detail: String
     val status = if (media == null) "PC medyası" else if (playing) "Şimdi çalıyor" else "Duraklatıldı"
     val scheme = MaterialTheme.colorScheme
     var showVolume by rememberSaveable { mutableStateOf(false) }
-    Surface(modifier.eonGlass(RoundedCornerShape(18.dp)), shape = RoundedCornerShape(18.dp), color = Color.Transparent) {
+    Surface(if (deck) modifier.deckGlass(accent = scheme.tertiary) else modifier.eonGlass(),
+        shape = eonPanelShape, color = Color.Transparent) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
             val compact = maxHeight < 208.dp * fontScale || maxWidth < 220.dp
@@ -137,8 +138,8 @@ internal fun EonMediaPlayer(media: JSONObject?, enabled: Boolean, detail: String
 @Composable
 private fun PlayerCover(bitmap: android.graphics.Bitmap?, title: String, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(scheme.surfaceVariant)
-        .border(1.dp, scheme.onSurface.copy(alpha = .08f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+    Box(modifier.clip(RoundedCornerShape(8.dp)).background(scheme.surfaceVariant)
+        .border(1.dp, scheme.onSurface.copy(alpha = .08f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
         if (bitmap != null) Image(bitmap.asImageBitmap(), "$title kapağı", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Icon(Icons.Rounded.MusicNote, null, Modifier.fillMaxSize(.4f), tint = scheme.onSurfaceVariant)
     }
@@ -195,6 +196,7 @@ private fun PlayerKey(id: String, label: String, icon: ImageVector, enabled: Boo
 @Composable
 private fun PlayerVolumeSheet(enabled: Boolean, onMedia: (String, String) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()
