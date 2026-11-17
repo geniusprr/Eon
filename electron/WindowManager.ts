@@ -40,6 +40,8 @@ export class WindowManager {
   private splashStatus: AppUpdateStatus | null = null
   private tray: Tray | null = null
   private allowClose = false
+  private closeToTray = false
+  private hiddenToTray = false
   private browserFocusMode = false
   private rendererUrl: string | null = null
   private programIndex: { createdAt: number; items: ProgramCandidate[] } | null = null
@@ -101,6 +103,11 @@ export class WindowManager {
       event.preventDefault()
       if (!window.webContents.isDestroyed()) window.webContents.send(APP_EVENTS.browserFocusShortcut)
     })
+    window.on('close', (event) => {
+      if (this.allowClose || !this.closeToTray || !this.tray || this.tray.isDestroyed()) return
+      event.preventDefault()
+      this.hideToTray()
+    })
     window.on('closed', () => {
       this.browserFocusMode = false
       this.mainWindow = null
@@ -110,8 +117,8 @@ export class WindowManager {
       this.browserFocusMode = false
       this.broadcastBrowserFocusMode()
     })
-    window.webContents.on('did-finish-load', () => {
-      if (!this.splashWindow && !app.commandLine.hasSwitch('background')) window.showInactive()
+    window.webContents.once('did-finish-load', () => {
+      if (!this.splashWindow && !this.hiddenToTray && !app.commandLine.hasSwitch('background')) window.showInactive()
     })
     window.webContents.on('did-fail-load', (_event, errorCode, description, validatedURL, isMainFrame) => {
       if (isMainFrame) console.error('[window] renderer did-fail-load', { errorCode, description, validatedURL })
@@ -180,7 +187,7 @@ export class WindowManager {
       this.splashTimer = null
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      if (!app.commandLine.hasSwitch('background')) this.mainWindow.show()
+      if (!this.hiddenToTray && !app.commandLine.hasSwitch('background')) this.mainWindow.show()
     }
     const splash = this.splashWindow
     this.splashWindow = null
@@ -210,13 +217,19 @@ export class WindowManager {
   showMain() {
     const window = this.getMainWindow()
     if (!window) return
+    this.hiddenToTray = false
     if (window.isMinimized()) window.restore()
     if (!window.isVisible()) window.show()
     window.focus()
   }
 
   hideToTray() {
+    this.hiddenToTray = true
     this.getMainWindow()?.hide()
+  }
+
+  setCloseToTray(enabled: boolean) {
+    this.closeToTray = enabled
   }
 
   minimize() {
@@ -245,12 +258,7 @@ export class WindowManager {
   }
 
   close() {
-    const window = this.getMainWindow()
-    if (!window) return
-    // Let the native close button and the renderer fallback share one real
-    // close path. main.ts owns the asynchronous cleanup in before-quit.
-    this.allowClose = true
-    window.close()
+    this.getMainWindow()?.close()
   }
 
   quit() {
@@ -411,7 +419,7 @@ export class WindowManager {
   }
 
   async configureTray(onQuit: () => void) {
-    if (this.tray) return
+    if (this.tray && !this.tray.isDestroyed()) return true
     let icon = nativeImage.createEmpty()
     try {
       // Packaged Windows builds inherit the Eon SVG through electron-builder;
@@ -426,15 +434,24 @@ export class WindowManager {
       const iconPath = path.join(app.getAppPath(), 'app-icon.png')
       icon = nativeImage.createFromPath(iconPath)
     }
-    this.tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
-    this.tray.setToolTip('Eon')
-    const menu = Menu.buildFromTemplate([
-      { label: 'Aç', click: () => this.showMain() },
-      { type: 'separator' },
-      { label: 'Çık', click: onQuit },
-    ])
-    this.tray.setContextMenu(menu)
-    this.tray.on('click', () => this.showMain())
+    if (this.allowClose) return false
+    try {
+      this.tray = new Tray(icon)
+      this.tray.setToolTip('Eon')
+      const menu = Menu.buildFromTemplate([
+        { label: 'Aç', click: () => this.showMain() },
+        { type: 'separator' },
+        { label: 'Çık', click: onQuit },
+      ])
+      this.tray.setContextMenu(menu)
+      this.tray.on('click', () => this.showMain())
+      return true
+    } catch (error) {
+      this.tray?.destroy()
+      this.tray = null
+      console.error('[window] Eon could not initialize the system tray', error)
+      return false
+    }
   }
 
   setWindowMode(mode: 'notes' | 'compact') {

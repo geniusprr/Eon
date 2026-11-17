@@ -34,3 +34,9 @@ jobs:
         run: |
           $process = Start-Process node_modules/electron/dist/electron.exe -ArgumentList 'electron/eon2/updates/updates-smoke.cjs' -Wait -PassThru -WindowStyle Hidden
           exit $process.ExitCode
+      - name: Eon 2 Windows tray and startup smoke
+        shell: pwsh
+        run: |
+          $process = Start-Process node_modules/electron/dist/electron.exe -ArgumentList 'electron/eon2/tray-smoke.cjs' -Wait -PassThru -RedirectStandardOutput tray-smoke.log -RedirectStandardError tray-smoke.err
+          Get-Content tray-smoke.log,tray-smoke.err
+          exit $process.ExitCode

@@ -62,7 +62,7 @@ function ActionButton({ children, onClick, icon, variant = 'quiet', disabled, ti
   </button>
 }
 
-type SharedSettings = { theme: AppTheme | null; tailscale: boolean; autostart: boolean }
+type SharedSettings = { theme: AppTheme | null; tailscale: boolean; autostart: boolean; closeToTray: boolean }
 type SettingsKey = keyof SharedSettings
 type MaterialMode = 'glass' | 'system' | 'opaque'
 const MATERIAL_STORAGE_KEY = 'eon2:material'
@@ -86,10 +86,11 @@ function Preferences({ theme, settings, onChange, error, material, onMaterialCha
       <button key={item.id} type="button" className={`eon2-theme-swatch eon2-theme-${item.id} ${theme === item.id ? 'is-selected' : ''}`} aria-pressed={theme === item.id} onClick={() => onChange('theme', item.id)}><span>{item.label}</span>{theme === item.id && <Check size={16}/>}</button>)}</div>
     <section className="eon2-settings-panel">
       <div className="eon2-settings-row"><div><strong>Yüzey görünümü</strong><p>Cam, dengeli saydamlık kullanır. Sistem, Windows erişilebilirlik tercihini izler.</p></div><div className="eon2-material-picker" role="group" aria-label="Yüzey görünümü">{([{ id: 'glass', label: 'Cam' }, { id: 'system', label: 'Sistem' }, { id: 'opaque', label: 'Opak' }] as const).map(mode => <button key={mode.id} type="button" aria-pressed={material === mode.id} onClick={() => onMaterialChange(mode.id)}>{mode.label}</button>)}</div></div>
-      <label className="eon2-settings-row"><div><strong>Windows ile aç</strong><p>Oturum açıldığında Eon bildirim alanında başlar.</p></div><input type="checkbox" role="switch" checked={settings?.autostart ?? false} disabled={!settings} onChange={event => onChange('autostart', event.target.checked)}/></label>
+      <label className="eon2-settings-row"><div><strong>Windows ile başlat</strong><p>Windows oturumu açıldığında Eon sistem tepsisinde başlar.</p></div><input type="checkbox" role="switch" checked={settings?.autostart ?? false} disabled={!settings} onChange={event => onChange('autostart', event.target.checked)}/></label>
+      <label className="eon2-settings-row"><div><strong>Kapatınca sistem tepsisinde çalış</strong><p>Pencereyi kapattığında Eon arka planda çalışmaya devam eder. Tamamen kapatmak için tepsideki Eon menüsünden Çık’ı seç.</p></div><input type="checkbox" role="switch" checked={settings?.closeToTray ?? true} disabled={!settings} onChange={event => onChange('closeToTray', event.target.checked)}/></label>
       <label className="eon2-settings-row"><div><strong>Tailscale bağlantısı</strong><p>USB kablosu çıkarıldığında aynı Tailscale ağından bağlan.</p></div><input type="checkbox" role="switch" checked={settings?.tailscale ?? false} disabled={!settings} onChange={event => onChange('tailscale', event.target.checked)}/></label>
     </section>
-    <section className="eon2-settings-panel"><div className="eon2-settings-row"><div><strong>Ayarları aktar</strong><p>Tema, başlangıç ve bağlantı ayarlarını JSON dosyasıyla taşı.</p></div><div className="eon2-section-actions"><ActionButton onClick={() => void backup('export')}>Dışa aktar</ActionButton><ActionButton onClick={() => void backup('import')}>İçe aktar</ActionButton></div></div>{backupMessage && <p role="status">{backupMessage}</p>}</section>
+    <section className="eon2-settings-panel"><div className="eon2-settings-row"><div><strong>Ayarları aktar</strong><p>Tema, başlangıç, sistem tepsisi ve bağlantı ayarlarını JSON dosyasıyla taşı.</p></div><div className="eon2-section-actions"><ActionButton onClick={() => void backup('export')}>Dışa aktar</ActionButton><ActionButton onClick={() => void backup('import')}>İçe aktar</ActionButton></div></div>{backupMessage && <p role="status">{backupMessage}</p>}</section>
     {error && <p className="eon2-error" role="alert">{error}</p>}
   </>
 }
@@ -160,7 +161,8 @@ export function Eon2App() {
           next = await desktopInvoke<SharedSettings>('eon2:settings:set', { key: 'initialTheme', value: isAppTheme(saved) ? saved : 'obsidian' })
         }
         if (active) {
-          setSettings(current => current?.theme === next.theme && current.autostart === next.autostart && current.tailscale === next.tailscale ? current : next)
+          setSettings(current => current?.theme === next.theme && current.autostart === next.autostart &&
+            current.closeToTray === next.closeToTray && current.tailscale === next.tailscale ? current : next)
           if (next.theme) setTheme(next.theme)
         }
       } catch (error) { if (active) setSettingsError(friendlyError(error)) }

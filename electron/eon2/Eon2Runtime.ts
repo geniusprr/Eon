@@ -42,6 +42,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   const storage = path.join(app.getPath('userData'), 'eon-2')
   let companionUpdates: CompanionUpdater | undefined
   const tailnetSettingsPath = path.join(storage, 'tailnet-settings.json')
+  const traySettingsPath = path.join(storage, 'tray-settings.json')
   const themePath = path.join(storage, 'theme.json')
   let sharedTheme: AppTheme | null = null
   try {
@@ -53,6 +54,12 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   let tailnetEnabled = false
   try { tailnetEnabled = JSON.parse(fs.readFileSync(tailnetSettingsPath, 'utf8')).enabled === true }
   catch { /* Disabled until explicit user opt-in. */ }
+  let closeToTray = process.platform === 'win32'
+  if (closeToTray) {
+    try { closeToTray = JSON.parse(fs.readFileSync(traySettingsPath, 'utf8')).enabled !== false }
+    catch { /* Keep the system tray enabled for existing installations. */ }
+  }
+  windows.setCloseToTray(closeToTray)
   let tailnetStatus: TailnetStatus = { installed:false, running:false, online:false, dnsName:null, ipv4:null }
   let tailnetReason: string | null = null
   let tailnetBusy = false
@@ -183,6 +190,7 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       theme: sharedTheme,
       tailscale: tailnetEnabled,
       autostart: process.platform === 'win32' && power.getAutostart(),
+      closeToTray,
     }
   }
   async function updateSettings(value: unknown, canManageWindows: boolean) {
@@ -198,6 +206,10 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
       }
     } else if (canManageWindows && key === 'autostart' && typeof next === 'boolean' && process.platform === 'win32') {
       power.setAutostart(next)
+    } else if (canManageWindows && key === 'closeToTray' && typeof next === 'boolean' && process.platform === 'win32') {
+      persistEnabledSetting(traySettingsPath, next)
+      closeToTray = next
+      windows.setCloseToTray(next)
     } else if (canManageWindows && key === 'tailscale' && typeof next === 'boolean') {
       persistTailnetSetting(next)
       void applyTailnetSetting().catch(() => { tailnetReason = 'Tailscale ayarı uygulanamadı.' })
@@ -287,12 +299,12 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
   void attachUsbDevices()
   const attachInterval = setInterval(() => { void attachUsbDevices() }, 3500)
   attachInterval.unref?.()
+  const hasTray = await windows.configureTray(() => windows.quit())
   const mainWindow = windows.createMainWindow(rendererTarget)
   pcRemote = new PcRemoteDesktop(path.join(path.dirname(preloadPath), 'remote', 'pc-capture-preload.cjs'),
     mainWindow, input, () => windows.showMain(),
     device => credentials.list().some(item => item.id === device.id && item.pairedAt === device.pairedAt))
   const scrcpyPresentation = new ScrcpyPresentation(mainWindow, scrcpy)
-  void windows.configureTray(() => windows.quit())
   let showingPairing = false
   notifyPhoneRequest = () => {
     if (showingPairing || mainWindow.isDestroyed()) return
@@ -438,9 +450,14 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     const backup = data as { version?: unknown; settings?: unknown }
     if (backup.version !== 1 || !backup.settings || typeof backup.settings !== 'object' || Array.isArray(backup.settings)) throw new Error('Desteklenmeyen ayar dosyası.')
     const saved = backup.settings as Record<string, unknown>
-    if ((saved.theme !== null && (typeof saved.theme !== 'string' || !isAppTheme(saved.theme))) || typeof saved.tailscale !== 'boolean' || typeof saved.autostart !== 'boolean') throw new Error('Ayar dosyasının içeriği geçersiz.')
+    if ((saved.theme !== null && (typeof saved.theme !== 'string' || !isAppTheme(saved.theme))) ||
+        typeof saved.tailscale !== 'boolean' || typeof saved.autostart !== 'boolean' ||
+        (saved.closeToTray !== undefined && typeof saved.closeToTray !== 'boolean')) throw new Error('Ayar dosyasının içeriği geçersiz.')
     if (saved.theme !== null) await updateSettings({ key: 'theme', value: saved.theme }, true)
-    if (process.platform === 'win32') await updateSettings({ key: 'autostart', value: saved.autostart }, true)
+    if (process.platform === 'win32') {
+      await updateSettings({ key: 'autostart', value: saved.autostart }, true)
+      if (saved.closeToTray !== undefined) await updateSettings({ key: 'closeToTray', value: saved.closeToTray }, true)
+    }
     await updateSettings({ key: 'tailscale', value: saved.tailscale }, true)
     return settingsSnapshot()
   })
@@ -587,13 +604,16 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return applyTailnetSetting()
   })
   function persistTailnetSetting(enabled: boolean) {
-    const temporary = `${tailnetSettingsPath}.${randomUUID()}.tmp`
+    persistEnabledSetting(tailnetSettingsPath, enabled)
+    tailnetEnabled = enabled
+  }
+  function persistEnabledSetting(file: string, enabled: boolean) {
+    const temporary = `${file}.${randomUUID()}.tmp`
     fs.mkdirSync(storage, { recursive: true })
     try {
       fs.writeFileSync(temporary, JSON.stringify({ version: 1, enabled }), { flag: 'wx', mode: 0o600 })
-      fs.renameSync(temporary, tailnetSettingsPath)
+      fs.renameSync(temporary, file)
     } finally { try { fs.unlinkSync(temporary) } catch { /* renamed */ } }
-    tailnetEnabled = enabled
   }
   async function applyTailnetSetting() {
     if (!tailnetEnabled) await usb.stopTailnet()
@@ -672,7 +692,10 @@ export async function startEon2Runtime(preloadPath: string, rendererTarget: stri
     return notes.delete(id, expectedRevisionId)
   })
 
-  mainWindow.webContents.once('did-finish-load', () => windows.finishSplash())
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (!hasTray && app.commandLine.hasSwitch('background')) windows.showMain()
+    else windows.finishSplash()
+  })
   mainWindow.on('closed', () => app.quit())
   return {
     windows,
